@@ -221,6 +221,201 @@ const DETAILS: Record<number, JobDetail> = {
   },
 };
 
+DETAILS[8] = {
+  about: "The Approach Control Officer will provide approach and departure control service to IFR and VFR aircraft operating within the Entebbe Terminal Manoeuvring Area (TMA), ensuring safe and expeditious flow of traffic between the en-route and aerodrome environments.",
+  responsibilities: [
+    "Provide APP/DEP control service within the Entebbe TMA",
+    "Issue clearances, traffic information and sequencing instructions to IFR arrivals and departures",
+    "Coordinate traffic with Entebbe ADC and Entebbe ACC sectors",
+    "Manage holding stacks during periods of high traffic demand",
+    "Maintain radar surveillance and update flight progress strips",
+    "Participate in contingency and emergency exercises as directed",
+  ],
+  requirements: [
+    "Bachelor's Degree in Aviation, Physics, Electronics or equivalent",
+    "Valid ICAO ATC licence with APP rating (ADC rating a strong advantage)",
+    "Minimum 3 years post-rating operational experience",
+    "Current ICAO Class 3 medical certificate",
+    "English Language Proficiency level 4 or above",
+    "Age 24–45 years at date of application",
+  ],
+  benefits: [
+    "Salary in the UG4 band (UGX 3.5M – 4.8M per month)",
+    "Annual ATC proficiency allowance and shift differential",
+    "Employer-funded ICAO recurrency training every 24 months",
+    "Medical cover for employee and immediate family",
+    "Defined-benefit pension scheme",
+    "34 days annual leave plus public holidays",
+  ],
+};
+
+DETAILS[9] = {
+  about: "The Flight Operations Inspector will conduct oversight of Ugandan air operators' flight operations standards, including crew licensing, operations manuals, flight and duty time limitations, and operational control systems, in accordance with ICAO Annex 6 and UCAA Aviation Regulations.",
+  responsibilities: [
+    "Inspect and audit Air Operator Certificate (AOC) holders' flight operations",
+    "Review and approve Operations Manuals, MELs and CDLs",
+    "Conduct en-route, line and simulator checks on flight crew",
+    "Investigate flight-operations-related incidents and accidents",
+    "Monitor crew licensing currency and recurrency training programmes",
+    "Develop and update Flight Operations Inspector guidance material",
+  ],
+  requirements: [
+    "Bachelor's Degree in Aeronautical Engineering, Aviation Science or equivalent",
+    "Valid ATPL (Airline Transport Pilot Licence) or CPL with instrument rating",
+    "Minimum 6 years flight operations experience with an AOC holder",
+    "Familiarity with ICAO Annex 6 and UCAA Part-OPS regulations",
+    "Strong written English for regulatory correspondence",
+    "Age 28–50 years at date of application",
+  ],
+  benefits: [
+    "Salary in the UG4 band (UGX 3.2M – 4.5M per month)",
+    "Annual international regulatory training sponsored by UCAA",
+    "Flight crew currency allowance",
+    "Medical cover for employee and immediate family",
+    "Defined-benefit pension scheme",
+    "34 days annual leave plus public holidays",
+  ],
+};
+
+DETAILS[10] = {
+  about: "The Dangerous Goods Inspector will enforce compliance with ICAO Technical Instructions for the Safe Transport of Dangerous Goods by Air (Doc 9284) and IATA Dangerous Goods Regulations across all operators, freight forwarders and ground handlers at Ugandan airports.",
+  responsibilities: [
+    "Inspect acceptance procedures for dangerous goods shipments at Entebbe International Airport",
+    "Audit and approve Dangerous Goods training programmes for operators and ground handlers",
+    "Investigate dangerous goods incidents, occurrences and undeclared shipments",
+    "Issue compliance notices and oversee corrective action plans",
+    "Liaise with Uganda Revenue Authority and IATA on cross-border DG matters",
+    "Prepare quarterly DG compliance reports for the Director of Aviation Safety",
+  ],
+  requirements: [
+    "Bachelor's Degree in Chemistry, Engineering, Aviation or related science",
+    "IATA Dangerous Goods Regulations Category 8 or 10 certificate",
+    "Minimum 4 years experience in dangerous goods compliance, logistics or aviation safety",
+    "Knowledge of ICAO Doc 9284 and IATA DGR (current edition)",
+    "Strong investigative and report-writing skills",
+    "Age 25–48 years at date of application",
+  ],
+  benefits: [
+    "Salary in the UG5 band (UGX 2.8M – 3.8M per month)",
+    "Annual IATA DGR update course sponsored by UCAA",
+    "Inspector allowance and safety equipment provided",
+    "Medical cover for employee and immediate family",
+    "Defined-benefit pension scheme",
+    "30 days annual leave plus public holidays",
+  ],
+};
+
+DETAILS[11] = {
+  about: "The Aviation Security Inspector will conduct oversight of aviation security programmes at Ugandan airports and air carriers, ensuring compliance with ICAO Annex 17, the National Civil Aviation Security Programme (NCASP) and UCAA Aviation Security Regulations.",
+  responsibilities: [
+    "Conduct security audits and inspections of airports, airlines and regulated agents",
+    "Test passenger, baggage and cargo screening processes through covert testing",
+    "Review and approve Aviation Security Programmes (ASPs) of operators",
+    "Investigate aviation security incidents and breaches",
+    "Train UCAA security oversight inspectors and liaise with the Uganda Police Air Wing",
+    "Represent UCAA at ICAO Universal Security Audit Programme (USAP) review meetings",
+  ],
+  requirements: [
+    "Bachelor's Degree in Security Studies, Law Enforcement, Aviation or related field",
+    "ICAO Aviation Security training (Category 3–6 or equivalent)",
+    "Minimum 4 years experience in aviation security operations or oversight",
+    "Clean police record; ability to obtain security clearance",
+    "Excellent observation, interviewing and report-writing skills",
+    "Age 25–48 years at date of application",
+  ],
+  benefits: [
+    "Salary in the UG5 band (UGX 2.9M – 3.9M per month)",
+    "ICAO aviation security training programme sponsored by UCAA",
+    "Security clearance and identity credentials provided",
+    "Medical cover for employee and immediate family",
+    "Defined-benefit pension scheme",
+    "30 days annual leave plus public holidays",
+  ],
+};
+
+DETAILS[12] = {
+  about: "The Procurement Officer will manage UCAA's procurement processes in compliance with the Public Procurement and Disposal of Public Assets (PPDA) Act, ensuring value for money and transparency across all procurement categories. This is a contract role renewable subject to performance.",
+  responsibilities: [
+    "Prepare and publish procurement notices on the PPDA portal and UCAA website",
+    "Manage tender evaluation committees and maintain procurement records",
+    "Negotiate contracts and service-level agreements with approved suppliers",
+    "Monitor contract performance and coordinate with end-user departments",
+    "Prepare PPDA compliance reports and respond to procurement audits",
+    "Maintain the approved supplier register and conduct due-diligence checks",
+  ],
+  requirements: [
+    "Bachelor's Degree in Procurement & Supply Chain Management, Commerce or related field",
+    "Full membership of Chartered Institute of Procurement & Supply (CIPS) preferred",
+    "Minimum 2 years experience in public-sector procurement under the PPDA framework",
+    "Proficiency in MS Office and procurement management systems",
+    "Strong ethics and attention to detail",
+    "Age 23–45 years at date of application",
+  ],
+  benefits: [
+    "Contract salary in the UG6 band (UGX 2.4M – 3.2M per month)",
+    "PPDA certification training covered by UCAA",
+    "Medical cover for employee",
+    "Public transport allowance",
+    "28 days annual leave plus public holidays",
+  ],
+};
+
+DETAILS[13] = {
+  about: "The Network Engineer will design, implement and maintain UCAA's wide-area and campus network infrastructure, ensuring high availability of mission-critical aviation systems including AIS/AIM, AMHS, AFTN and corporate IT networks across all UCAA sites.",
+  responsibilities: [
+    "Design and manage LAN, WAN, MPLS and VPN network topologies",
+    "Configure and maintain Cisco/Juniper switches, routers and next-generation firewalls",
+    "Ensure 99.9% uptime of aeronautical fixed service (AFS) networks",
+    "Implement network security policies, VLANs and access control lists",
+    "Monitor network performance with SNMP/NetFlow tools (SolarWinds, PRTG)",
+    "Liaise with MTN/Liquid Telecom on leased-line and VSAT connectivity issues",
+  ],
+  requirements: [
+    "Bachelor's Degree in Computer Networks, Telecommunications or IT",
+    "CCNP or equivalent network engineering certification (JNCIP, CompTIA Network+)",
+    "Minimum 3 years enterprise network engineering experience",
+    "Hands-on experience with routing protocols (OSPF, BGP, EIGRP)",
+    "Knowledge of network security principles and firewall management",
+    "Age 24–42 years at date of application",
+  ],
+  benefits: [
+    "Salary in the UG5 band (UGX 2.8M – 3.7M per month)",
+    "Annual certification budget (Cisco, Juniper renewals)",
+    "On-call standby allowance for critical system incidents",
+    "Medical cover for employee and immediate family",
+    "Defined-benefit pension scheme",
+    "30 days annual leave plus public holidays",
+  ],
+};
+
+DETAILS[14] = {
+  about: "The Principal, Aeronautical Information Services (AIS) will lead UCAA's AIS/AIM function, overseeing the production, validation and distribution of aeronautical data and information products including AIPs, NOTAMs, AIC and aeronautical charts in accordance with ICAO Annex 15 and Doc 8126. Open to verified CAA staff only.",
+  responsibilities: [
+    "Manage the production and quality assurance of Uganda's Aeronautical Information Publication (AIP) and AIP Supplements",
+    "Oversee the NOTAM office — originating, checking and distributing NOTAMs via AFTN/AMHS",
+    "Lead the transition from AIS to Aeronautical Information Management (AIM) in line with ICAO standards",
+    "Coordinate with survey, obstacle and terrain data providers for aeronautical chart accuracy",
+    "Represent UCAA at ICAO AFI AIS/MAP meetings and ESARMA conferences",
+    "Manage a team of AIS specialists and AIM data technicians",
+  ],
+  requirements: [
+    "Bachelor's Degree in Aeronautical Science, Geospatial Information or related field",
+    "ICAO AIS/AIM training (Cat 1–4 or equivalent)",
+    "Minimum 6 years AIS operational experience with at least 2 years at supervisory level",
+    "Current substantive UCAA staff member at Principal or Senior Officer level",
+    "Knowledge of AIXM 5.1, SWIM and WXXM standards an advantage",
+    "Age 28–52 years at date of application",
+  ],
+  benefits: [
+    "Salary in the UG3 band (UGX 4.5M – 6.0M per month)",
+    "ICAO AIM transition training sponsored annually",
+    "Vehicle allowance for inter-site coordination duties",
+    "Medical cover for employee, spouse and dependants",
+    "Defined-benefit pension scheme",
+    "34 days annual leave plus public holidays",
+  ],
+};
+
 const DEFAULT_DETAIL: JobDetail = {
   about: "This is an exciting opportunity to join Uganda's national aviation regulator. Full details will be provided to shortlisted candidates.",
   responsibilities: ["Carry out the duties of the post as assigned by the supervisor", "Uphold UCAA values of safety, integrity and service excellence"],

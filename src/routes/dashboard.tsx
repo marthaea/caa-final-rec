@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { Check, Circle, Bell, FileText, Eye, Users, Award, Mail, Pencil, X, UserCog, CheckCircle2 } from "lucide-react";
+import { Check, Circle, Bell, FileText, Eye, Users, Award, Mail, Pencil, X, UserCog, Download } from "lucide-react";
 import { useApp, type Application } from "@/context/AppContext";
+import { downloadApplicationSummary } from "@/lib/admin-pdf";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
@@ -28,7 +29,7 @@ const NOTIF_ICON: Record<string, string> = {
 };
 
 function DashboardPage() {
-  const { auth, applications, withdrawApplication, updateProfile, pushToast, notifications, markNotificationRead } = useApp();
+  const { auth, applications, jobs, withdrawApplication, updateProfile, pushToast, notifications, markNotificationRead } = useApp();
   const navigate = useNavigate();
   const [confirmId, setConfirmId] = useState<number | null>(null);
   const [editProfile, setEditProfile] = useState(false);
@@ -201,6 +202,17 @@ function DashboardPage() {
                           className="px-2.5 py-1.5 text-xs border border-caa-border text-caa-navy rounded-md hover:border-caa-navy hover:bg-caa-surface inline-flex items-center gap-1"
                         >
                           <Pencil className="h-3 w-3" /> Edit
+                        </button>
+                        <button
+                          onClick={() => {
+                            const job = jobs.find((j) => j.id === a.jobId);
+                            downloadApplicationSummary(a, `${auth.firstName} ${auth.lastName}`, auth.email, job);
+                            pushToast({ type: "success", title: "PDF downloaded", message: `Application summary for ${a.title}` });
+                          }}
+                          className="px-2.5 py-1.5 text-xs border border-caa-border text-caa-navy rounded-md hover:border-caa-navy hover:bg-caa-surface inline-flex items-center gap-1"
+                          title="Download application summary PDF"
+                        >
+                          <Download className="h-3 w-3" /> PDF
                         </button>
                         <button
                           onClick={() => setConfirmId(a.id)}

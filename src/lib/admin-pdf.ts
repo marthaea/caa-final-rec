@@ -256,6 +256,83 @@ export function downloadInternsReport(apps: Application[], jobs: Job[], actor: s
   doc.save(`caa-interns-cgpa-${Date.now()}.pdf`);
 }
 
+export function downloadApplicationSummary(
+  app: Application,
+  candidateName: string,
+  candidateEmail: string,
+  job?: Job,
+) {
+  const doc = new jsPDF();
+  const refNo = `UCAA/REC/${String(app.id).padStart(5, "0")}/${new Date().getFullYear()}`;
+  header(doc, "Application Confirmation", `${app.title} · Ref: ${refNo}`);
+
+  let y = 68;
+
+  // Candidate block
+  doc.setTextColor(...NAVY); doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+  doc.text("Candidate Details", 12, y); y += 2;
+  autoTable(doc, {
+    startY: y,
+    theme: "plain",
+    body: [
+      ["Full name",           candidateName || "—"],
+      ["Email address",       candidateEmail || "—"],
+      ["Account type",        "Registered Candidate"],
+    ],
+    styles: { fontSize: 9, cellPadding: 1.8 },
+    columnStyles: { 0: { fontStyle: "bold", cellWidth: 48, textColor: [90, 90, 90] } },
+  });
+  y = (doc as any).lastAutoTable.finalY + 6;
+
+  // Application block
+  doc.setTextColor(...NAVY); doc.setFont("helvetica", "bold"); doc.setFontSize(11);
+  doc.text("Application Details", 12, y); y += 2;
+  autoTable(doc, {
+    startY: y,
+    theme: "plain",
+    body: [
+      ["Reference number",    refNo],
+      ["Position applied",    app.title],
+      ["Department",          job?.dept ?? app.dept],
+      ["Location",            job?.location ?? "—"],
+      ["Salary band",         job?.salaryBand ? `${job.salaryBand} (${job.salary})` : "—"],
+      ["Employment type",     job?.type ?? "—"],
+      ["Application status",  app.status],
+      ["Profile completion",  `${app.completion}%`],
+      ["Date submitted",      app.date],
+      ["Vacancy closes",      job?.closes ?? "—"],
+    ],
+    styles: { fontSize: 9, cellPadding: 1.8 },
+    columnStyles: { 0: { fontStyle: "bold", cellWidth: 48, textColor: [90, 90, 90] } },
+  });
+  y = (doc as any).lastAutoTable.finalY + 8;
+
+  // Next steps box
+  doc.setFillColor(245, 247, 250);
+  doc.roundedRect(10, y, 190, 38, 2, 2, "F");
+  doc.setDrawColor(...NAVY); doc.setLineWidth(0.3);
+  doc.roundedRect(10, y, 190, 38, 2, 2, "S");
+  doc.setTextColor(...NAVY); doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+  doc.text("What happens next?", 15, y + 7);
+  doc.setTextColor(50, 50, 50); doc.setFont("helvetica", "normal"); doc.setFontSize(8.5);
+  const steps = [
+    "1. Your application is being reviewed by the CAA Uganda HR team.",
+    "2. Shortlisted candidates will be contacted within 14 working days.",
+    "3. All communication will be sent to your registered email address.",
+    "4. Do not call UCAA offices to enquire about application status — check your dashboard.",
+  ];
+  steps.forEach((s, i) => doc.text(s, 15, y + 14 + i * 5.5));
+  y += 48;
+
+  // Authenticity note
+  doc.setFontSize(7.5); doc.setTextColor(100, 100, 100); doc.setFont("helvetica", "italic");
+  doc.text("This document was generated automatically from the UCAA e-Recruitment Portal. It serves as proof of application submission only.", 10, y, { maxWidth: 190 });
+  doc.text("Uganda Civil Aviation Authority does not charge any recruitment fees at any stage of the process.", 10, y + 5, { maxWidth: 190 });
+
+  footer(doc, candidateName || "Candidate");
+  doc.save(`caa-application-${refNo.replace(/\//g, "-")}.pdf`);
+}
+
 export function downloadStaffReport(staff: StaffRecord[], actor: string) {
   const doc = new jsPDF();
   header(doc, "Internal Staff Register", `${staff.length} verified CAA staff records`);

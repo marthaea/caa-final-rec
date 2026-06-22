@@ -15,13 +15,14 @@ export const Route = createFileRoute("/vacancies")({
   component: VacanciesPage,
 });
 
-const TABS = [
-  { key: "all", label: "All Roles", count: 12 },
-  { key: "atm", label: "Air Traffic Mgmt", count: 3 },
-  { key: "safety", label: "Aviation Safety", count: 4 },
-  { key: "finance", label: "Finance & Admin", count: 2 },
-  { key: "ict", label: "ICT & Systems", count: 2 },
-  { key: "legal", label: "Legal", count: 1 },
+const DEPT_TABS = [
+  { key: "all",     label: "All Roles" },
+  { key: "atm",     label: "Air Traffic Mgmt" },
+  { key: "safety",  label: "Aviation Safety" },
+  { key: "finance", label: "Finance & Admin" },
+  { key: "ict",     label: "ICT & Systems" },
+  { key: "legal",   label: "Legal" },
+  { key: "ops",     label: "Operations" },
 ];
 
 function VacanciesPage() {
@@ -35,6 +36,8 @@ function VacanciesPage() {
   }, [active]);
   const visible = jobs.filter(canSeeJob);
   const filtered = active === "all" ? visible : visible.filter((j) => j.deptKey === active);
+  const tabCount = (key: string) => key === "all" ? visible.length : visible.filter((j) => j.deptKey === key).length;
+  const tabs = DEPT_TABS.filter((t) => tabCount(t.key) > 0);
 
   return (
     <>
@@ -53,7 +56,7 @@ function VacanciesPage() {
       <div className="px-4 sm:px-6 mt-8">
         <div className="mx-auto max-w-6xl">
           <div className="flex gap-2 overflow-x-auto pb-2">
-            {TABS.map((t) => (
+            {tabs.map((t) => (
               <button
                 key={t.key}
                 onClick={() => setActive(t.key)}
@@ -63,7 +66,7 @@ function VacanciesPage() {
                     : "bg-white text-caa-body border-caa-border hover:border-caa-navy"
                 }`}
               >
-                {t.label} ({t.count})
+                {t.label} ({tabCount(t.key)})
               </button>
             ))}
           </div>

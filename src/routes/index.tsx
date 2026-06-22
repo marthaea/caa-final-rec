@@ -6,6 +6,8 @@ import { useApp } from "@/context/AppContext";
 import heroImg from "@/assets/hero-office.jpg";
 import heroOffices from "@/assets/hero-caa-offices.jpg";
 import heroJet from "@/assets/hero-jet.jpg";
+import heroPlaneCrane from "@/assets/hero-plane-crane.jpg";
+import heroPlaneBlue from "@/assets/hero-plane-blue.jpg";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -36,7 +38,7 @@ function Home() {
 
   const shown = filtered.slice(0, 4);
 
-  const slides = [heroImg, heroOffices, heroJet];
+  const slides = [heroImg, heroPlaneCrane, heroOffices, heroPlaneBlue, heroJet];
   const [slide, setSlide] = useState(0);
   useEffect(() => {
     const t = setInterval(() => setSlide((s) => (s + 1) % slides.length), 2000);
@@ -119,8 +121,8 @@ function Home() {
       <section className="px-4 sm:px-6 mt-14">
         <div className="mx-auto max-w-5xl bg-white rounded-xl border border-caa-border py-6 grid grid-cols-2 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-caa-border">
           {[
-            { n: "12", l: "Open Positions" },
-            { n: "4", l: "Departments Hiring" },
+            { n: String(jobs.filter((j) => j.visibility === "external").length), l: "Open Positions" },
+            { n: String(new Set(jobs.filter((j) => j.visibility === "external").map((j) => j.deptKey)).size), l: "Departments Hiring" },
             { n: "380+", l: "Staff Employed" },
             { n: "2,100+", l: "Applications This Year" },
           ].map((s) => (
