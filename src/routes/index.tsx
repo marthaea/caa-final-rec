@@ -79,8 +79,12 @@ function Home() {
               <Link to="/vacancies" className="px-6 py-3 bg-white text-caa-navy font-semibold rounded-md hover:bg-caa-gold-2 transition-colors">
                 Browse Vacancies
               </Link>
-              <a href="#featured" className="px-6 py-3 border border-white/50 text-white font-semibold rounded-md hover:bg-white/10 transition-colors">
+              <a
+                href="#featured"
+                className="caa-hero-cta px-6 py-3 border-2 border-white text-white font-semibold rounded-md inline-flex items-center gap-2"
+              >
                 See Open Roles
+                <span className="text-base leading-none">↓</span>
               </a>
             </div>
           </div>

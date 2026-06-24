@@ -24,7 +24,14 @@ const BOTTOM_LINKS = [
   { label: "Webmail",          href: "https://mail.caa.co.ug" },
 ];
 
-const PHOTOS = [heroOffices, heroJet, heroOffice, heroJet, heroOffices, heroOffice];
+const PHOTOS = [
+  heroOffices,
+  heroJet,
+  heroOffice,
+  "/Uganda-Airlines-150x150.jpg",
+  "/background-image-scaled-e1718653628764-150x150.jpg",
+  heroJet,
+];
 
 function SvgX() {
   return (
@@ -140,10 +147,9 @@ export function Footer() {
               <div className="bg-white/5 border border-white/10 rounded-lg p-4">
                 <div className="flex items-center gap-3 mb-4">
                   <img
-                    src="https://caa.go.ug/wp-content/uploads/2021/06/CAA-LOGO-FOR-WEB.png"
+                    src={logo}
                     alt="Uganda CAA"
                     className="h-10 w-10 rounded-full bg-white object-contain p-1"
-                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
                   />
                   <div>
                     <p className="text-white text-sm font-semibold leading-none">Uganda CAA</p>
