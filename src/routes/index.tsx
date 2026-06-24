@@ -22,21 +22,28 @@ export const Route = createFileRoute("/")({
 });
 
 function Home() {
-  const { jobs } = useApp();
+  const { jobs, canSeeJob } = useApp();
   const [q, setQ] = useState("");
   const [dept, setDept] = useState("All");
   const [loc, setLoc] = useState("All");
 
+  const visible = useMemo(() => jobs.filter(canSeeJob), [jobs, canSeeJob]);
+
   const filtered = useMemo(() => {
-    return jobs.filter((j) => {
-      const matchesQ = !q || (j.title + j.dept).toLowerCase().includes(q.toLowerCase());
+    return visible.filter((j) => {
+      const matchesQ = !q || (j.title + " " + j.dept + " " + j.location).toLowerCase().includes(q.toLowerCase());
       const matchesDept = dept === "All" || j.dept === dept;
       const matchesLoc = loc === "All" || j.location === loc;
       return matchesQ && matchesDept && matchesLoc;
     });
-  }, [jobs, q, dept, loc]);
+  }, [visible, q, dept, loc]);
 
-  const shown = filtered.slice(0, 4);
+  const isSearching = q !== "" || dept !== "All" || loc !== "All";
+  const shown = isSearching ? filtered : filtered.slice(0, 4);
+
+  const handleSearch = () => {
+    document.getElementById("featured")?.scrollIntoView({ behavior: "smooth" });
+  };
 
   const slides = [heroImg, heroPlaneCrane, heroOffices, heroPlaneBlue, heroJet];
   const [slide, setSlide] = useState(0);
@@ -110,7 +117,10 @@ function Home() {
               <option>Kampala HQ</option>
               <option>Entebbe Airport</option>
             </select>
-            <button className="px-6 py-2.5 bg-caa-gold text-caa-navy text-sm font-semibold rounded-md hover:bg-caa-gold-2 transition-colors">
+            <button
+              onClick={handleSearch}
+              className="px-6 py-2.5 bg-caa-gold text-caa-navy text-sm font-semibold rounded-md hover:bg-caa-gold-2 transition-colors"
+            >
               Search
             </button>
           </div>
@@ -121,8 +131,8 @@ function Home() {
       <section className="px-4 sm:px-6 mt-14">
         <div className="mx-auto max-w-5xl bg-white rounded-xl border border-caa-border py-6 grid grid-cols-2 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-caa-border">
           {[
-            { n: String(jobs.filter((j) => j.visibility === "external").length), l: "Open Positions" },
-            { n: String(new Set(jobs.filter((j) => j.visibility === "external").map((j) => j.deptKey)).size), l: "Departments Hiring" },
+            { n: String(visible.length), l: "Open Positions" },
+            { n: String(new Set(visible.map((j) => j.deptKey)).size), l: "Departments Hiring" },
             { n: "380+", l: "Staff Employed" },
             { n: "2,100+", l: "Applications This Year" },
           ].map((s) => (
@@ -138,7 +148,9 @@ function Home() {
       <section id="featured" className="px-4 sm:px-6 mt-16">
         <div className="mx-auto max-w-5xl">
           <div className="flex items-end justify-between mb-6">
-            <h2 className="font-bold text-2xl text-caa-body">Featured Vacancies</h2>
+            <h2 className="font-bold text-2xl text-caa-body">
+              {isSearching ? `${filtered.length} result${filtered.length !== 1 ? "s" : ""} found` : "Featured Vacancies"}
+            </h2>
             <Link to="/vacancies" className="text-sm text-caa-navy hover:text-caa-gold inline-flex items-center gap-1">
               View all <ArrowRight className="h-4 w-4" />
             </Link>

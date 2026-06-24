@@ -463,3 +463,95 @@ export function downloadShortlistedDossiers(
   footer(doc, actor);
   doc.save(`caa-shortlist-dossiers-${Date.now()}.pdf`);
 }
+
+export function downloadJobAdvert(job: Job, actor: string) {
+  const doc = new jsPDF();
+  header(doc, "Job Advertisement", job.dept);
+
+  // Title block
+  let y = 65;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(15);
+  doc.setTextColor(...NAVY);
+  const titleLines = doc.splitTextToSize(job.title.toUpperCase(), 185);
+  doc.text(titleLines, 10, y);
+  y += titleLines.length * 7 + 4;
+
+  // Visibility ribbon
+  const isInternal = job.visibility === "internal";
+  doc.setFillColor(isInternal ? 13 : 16, isInternal ? 36 : 111, isInternal ? 84 : 74);
+  doc.roundedRect(10, y, 190, 7, 1, 1, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.text(
+    isInternal ? "INTERNAL VACANCY — CAA STAFF ONLY" : "EXTERNAL VACANCY — OPEN TO ALL QUALIFIED CANDIDATES",
+    105, y + 4.8,
+    { align: "center" },
+  );
+  y += 12;
+
+  // Key details table
+  autoTable(doc, {
+    startY: y,
+    head: [["Field", "Details"]],
+    body: [
+      ["Department",            job.dept],
+      ["Location",              job.location],
+      ["Employment Type",       job.type],
+      ["Salary Band",           `${job.salaryBand} — ${job.salary}`],
+      ["Minimum Age",           `${job.minAge} years`],
+      ["Required Experience",   `${job.requiredExperience} year(s)`],
+      ["Minimum Qualification", job.requiredQualification],
+      ["Application Deadline",  job.closes],
+    ],
+    headStyles: { fillColor: NAVY, textColor: 255, fontStyle: "bold" },
+    styles: { fontSize: 9.5, cellPadding: 3 },
+    columnStyles: { 0: { fontStyle: "bold", cellWidth: 58, textColor: [60, 60, 60] } },
+    alternateRowStyles: { fillColor: [245, 247, 250] },
+  });
+  y = (doc as any).lastAutoTable.finalY + 10;
+
+  // Description
+  if (job.description?.trim()) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(...NAVY);
+    doc.text("ABOUT THE ROLE", 10, y);
+    y += 1;
+    doc.setDrawColor(...NAVY);
+    doc.setLineWidth(0.3);
+    doc.line(10, y + 2, 65, y + 2);
+    y += 6;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9.5);
+    doc.setTextColor(40, 40, 40);
+    const descLines = doc.splitTextToSize(job.description, 185);
+    doc.text(descLines, 10, y);
+    y += descLines.length * 4.8 + 10;
+  }
+
+  // How to apply box
+  doc.setFillColor(245, 247, 250);
+  doc.roundedRect(10, y, 190, 32, 2, 2, "F");
+  doc.setDrawColor(...NAVY);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(10, y, 190, 32, 2, 2, "S");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(10);
+  doc.setTextColor(...NAVY);
+  doc.text("HOW TO APPLY", 15, y + 7);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
+  doc.setTextColor(40, 40, 40);
+  const howTo = doc.splitTextToSize(
+    `Eligible candidates should apply online via the CAA Uganda e-Recruitment Portal at caa.co.ug. ` +
+    `Applications must be submitted no later than ${job.closes}. Only shortlisted candidates will be contacted. ` +
+    `CAA Uganda does not charge any fees at any stage of recruitment.`,
+    178,
+  );
+  doc.text(howTo, 15, y + 14);
+
+  footer(doc, actor);
+  doc.save(`caa-job-advert-${(job.abbr || String(job.id)).toLowerCase()}-${Date.now()}.pdf`);
+}

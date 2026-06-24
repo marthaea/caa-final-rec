@@ -3,6 +3,7 @@ import { Phone, Mail, Clock, MapPin, ChevronRight } from "lucide-react";
 import heroOffices from "@/assets/hero-caa-offices.jpg";
 import heroJet from "@/assets/hero-jet.jpg";
 import heroOffice from "@/assets/hero-office.jpg";
+import logo from "@/assets/caa-logo.png";
 
 const IMPORTANT_LINKS = [
   { label: "National Planning Authority",       href: "https://www.npa.go.ug" },
@@ -15,12 +16,12 @@ const IMPORTANT_LINKS = [
 ];
 
 const BOTTOM_LINKS = [
-  { label: "Disclaimer",       href: "https://caa.go.ug" },
-  { label: "Website Policies", href: "https://caa.go.ug" },
-  { label: "AIS",              href: "https://caa.go.ug" },
-  { label: "ASL",              href: "https://caa.go.ug" },
-  { label: "ASCRS",            href: "https://caa.go.ug" },
-  { label: "Webmail",          href: "https://caa.go.ug" },
+  { label: "Disclaimer",       href: "https://www.caa.co.ug/disclaimer/" },
+  { label: "Website Policies", href: "https://www.caa.co.ug/privacy-policy/" },
+  { label: "AIS",              href: "https://www.caa.co.ug/ais/" },
+  { label: "ASL",              href: "https://www.caa.co.ug/aviation-safety-library/" },
+  { label: "ASCRS",            href: "https://www.caa.co.ug/ascrs/" },
+  { label: "Webmail",          href: "https://mail.caa.co.ug" },
 ];
 
 const PHOTOS = [heroOffices, heroJet, heroOffice, heroJet, heroOffices, heroOffice];
@@ -71,9 +72,12 @@ export function Footer() {
 
             {/* Col 1 — UCAA Head Office */}
             <div>
-              <h3 className="text-white font-bold text-sm uppercase tracking-widest mb-5">
-                UCAA Head Office
-              </h3>
+              <div className="flex items-center gap-3 mb-5">
+                <img src={logo} alt="Uganda Civil Aviation Authority" className="h-12 w-auto bg-white rounded p-1" />
+                <h3 className="text-white font-bold text-sm uppercase tracking-widest leading-snug">
+                  UCAA<br />Head Office
+                </h3>
+              </div>
               <ul className="space-y-3.5 text-white/75 text-[13px]">
                 <li className="flex items-start gap-3">
                   <Phone className="h-4 w-4 mt-0.5 text-white/50 shrink-0" />
@@ -199,10 +203,13 @@ export function Footer() {
 
       {/* ── Bottom bar ──────────────────────────────────────── */}
       <div className="bg-[#071d3e]">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 py-3.5 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <p className="text-white/60 text-[11px]">
-            Copyright © Uganda Civil Aviation Authority. All rights reserved.
-          </p>
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 py-3 flex flex-col sm:flex-row items-center justify-between gap-2">
+          <div className="flex items-center gap-3">
+            <img src={logo} alt="CAA Uganda" className="h-7 w-auto bg-white/10 rounded p-0.5 opacity-80" />
+            <p className="text-white/60 text-[11px]">
+              Copyright © Uganda Civil Aviation Authority. All rights reserved.
+            </p>
+          </div>
           <nav className="flex flex-wrap items-center gap-x-0 gap-y-1">
             {BOTTOM_LINKS.map((l, i) => (
               <span key={l.label} className="flex items-center">

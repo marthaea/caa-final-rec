@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, Plus, Trash2, Check, AlertCircle, Pencil, Up
 import { useApp, EMPTY_CV, type CvProfile, type CvQualification, type QualLevel } from "@/context/AppContext";
 import { SuccessModal } from "@/components/SuccessModal";
 import { O_LEVEL_SUBJECTS, A_LEVEL_SUBJECTS, O_LEVEL_GRADES, A_LEVEL_GRADES, QUAL_LEVELS } from "@/lib/uganda-curriculum";
+import { extractPdfText } from "@/lib/pdf-extract";
 
 export const Route = createFileRoute("/apply")({
   validateSearch: z.object({ jobId: z.coerce.number().optional() }),
@@ -71,30 +72,91 @@ function ApplyPage() {
             </div>
             <label className="shrink-0 cursor-pointer px-3 py-1.5 text-xs font-semibold bg-caa-navy text-white rounded-md hover:bg-caa-navy-2 transition-colors">
               Upload CV
-              <input type="file" accept=".txt,.pdf,.doc,.docx" className="sr-only" onChange={(e) => {
+              <input type="file" accept=".txt,.pdf,.doc,.docx" className="sr-only" onChange={async (e) => {
                 const file = e.target.files?.[0];
                 if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                  const text = (ev.target?.result as string) ?? "";
-                  const email = text.match(/[\w.+-]+@[\w-]+\.\w{2,6}/)?.[0] ?? "";
-                  const phone = text.match(/(\+256|0)[0-9\s-]{8,12}/)?.[0]?.replace(/\s|-/g, "") ?? "";
-                  const nin = text.match(/[A-Z]{2}\d{7}[A-Z]{1}/)?.[0] ?? "";
-                  const dobMatch = text.match(/\b(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})\b/);
-                  const dob = dobMatch ? `${dobMatch[3]}-${dobMatch[2].padStart(2,"0")}-${dobMatch[1].padStart(2,"0")}` : "";
-                  const filled: Partial<typeof data.personal> = {};
-                  if (email) filled.email = email;
-                  if (phone) filled.phone = phone;
-                  if (nin) filled.nin = nin;
-                  if (dob) filled.dob = dob;
-                  if (Object.keys(filled).length > 0) {
-                    setPersonal(filled as any);
-                    pushToast({ type: "success", title: "CV parsed", message: `${Object.keys(filled).length} field(s) auto-filled. Review and correct as needed.` });
+                // Reset input so the same file can be re-uploaded
+                (e.target as HTMLInputElement).value = "";
+                try {
+                  let text: string;
+                  if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
+                    text = await extractPdfText(file);
                   } else {
-                    pushToast({ type: "info", title: "Could not extract fields", message: "Please fill the form manually. Structured PDF text required." });
+                    text = await new Promise<string>((res, rej) => {
+                      const r = new FileReader();
+                      r.onload = (ev) => res((ev.target?.result as string) ?? "");
+                      r.onerror = rej;
+                      r.readAsText(file);
+                    });
                   }
-                };
-                reader.readAsText(file);
+
+                  const filled: Partial<typeof data.personal> = {};
+
+                  // Email
+                  const emailMatch = text.match(/[\w.+-]+@[\w-]+\.\w{2,6}/);
+                  if (emailMatch) filled.email = emailMatch[0];
+
+                  // Phone — Uganda formats: +256XXXXXXXXX, 07XXXXXXXX, 075XXXXXXX
+                  const phoneMatch =
+                    text.match(/\+256[\s\-]?[0-9]{2,3}[\s\-]?[0-9]{3,4}[\s\-]?[0-9]{3,4}/) ||
+                    text.match(/0[7][0-9][\s\-]?[0-9]{3}[\s\-]?[0-9]{4}/) ||
+                    text.match(/(\+256|0)[0-9\s\-]{8,12}/);
+                  if (phoneMatch) filled.phone = phoneMatch[0].replace(/[\s\-]/g, "");
+
+                  // NIN
+                  const ninMatch = text.match(/[A-Z]{2}\d{7}[A-Z]/);
+                  if (ninMatch) filled.nin = ninMatch[0];
+
+                  // Date of birth — DD/MM/YYYY or YYYY-MM-DD
+                  const dobDMY = text.match(/\b(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.]((?:19|20)\d{2})\b/);
+                  const dobISO = text.match(/\b((?:19|20)\d{2})-(0[1-9]|1[0-2])-([0-2]\d|3[01])\b/);
+                  if (dobISO) {
+                    filled.dob = dobISO[0];
+                  } else if (dobDMY) {
+                    filled.dob = `${dobDMY[3]}-${dobDMY[2].padStart(2, "0")}-${dobDMY[1].padStart(2, "0")}`;
+                  }
+
+                  // Name — labelled fields first, then first prominent two-word line
+                  const firstNameLabelled = text.match(/(?:First\s*Name|Given\s*Name|Forename)[:\s]+([A-Za-z]{2,20})/i)?.[1];
+                  const lastNameLabelled  = text.match(/(?:Last\s*Name|Surname|Family\s*Name)[:\s]+([A-Za-z]{2,20})/i)?.[1];
+                  if (firstNameLabelled) filled.firstName = firstNameLabelled;
+                  if (lastNameLabelled)  filled.lastName  = lastNameLabelled;
+
+                  // Fallback: first line that looks like "FirstName LastName"
+                  if (!firstNameLabelled && !lastNameLabelled) {
+                    const nameLine = text
+                      .split(/\n/)
+                      .map((l) => l.trim())
+                      .find((l) => /^[A-Z][a-z]{1,15}(?:\s+[A-Z][a-z]{1,15}){1,2}$/.test(l));
+                    if (nameLine) {
+                      const parts = nameLine.split(/\s+/);
+                      filled.firstName = parts[0];
+                      filled.lastName  = parts[parts.length - 1];
+                    }
+                  }
+
+                  // Nationality
+                  const natMatch = text.match(/(?:Nationality|Citizenship|Citizen)[:\s]+([A-Za-z]{3,20})/i);
+                  if (natMatch) filled.nationality = natMatch[1];
+
+                  // Address
+                  const addrMatch = text.match(/(?:Address|Residence|Location)[:\s]+(.{10,80})/i);
+                  if (addrMatch) filled.address = addrMatch[1].trim();
+
+                  // Gender
+                  const genderMatch = text.match(/\b(Male|Female)\b/i);
+                  if (genderMatch) filled.gender = genderMatch[1].charAt(0).toUpperCase() + genderMatch[1].slice(1).toLowerCase();
+
+                  const count = Object.keys(filled).length;
+                  if (count > 0) {
+                    setPersonal(filled as any);
+                    pushToast({ type: "success", title: "CV auto-filled", message: `${count} field${count > 1 ? "s" : ""} filled from your CV. Review and adjust as needed.` });
+                  } else {
+                    pushToast({ type: "info", title: "No fields extracted", message: "The CV format wasn't recognised. Please fill the form manually." });
+                  }
+                } catch {
+                  pushToast({ type: "warning", title: "CV parse failed", message: "Could not read the file. Please fill the form manually." });
+                }
               }} />
             </label>
           </div>

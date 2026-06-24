@@ -1,11 +1,8 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Menu, X, Search, Globe } from "lucide-react";
+import { Menu, X, Search } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 import logo from "@/assets/caa-logo.png";
-
-const LANGS = ["EN", "SW", "LG"] as const;
-type Lang = (typeof LANGS)[number];
 
 function SvgX() {
   return (
@@ -52,24 +49,9 @@ const SOCIAL = [
 ];
 
 export function Navbar() {
-  const { auth, signOut, pushToast } = useApp();
+  const { auth, signOut } = useApp();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  const [lang, setLang] = useState<Lang>("EN");
-
-  useEffect(() => {
-    try {
-      const saved = (localStorage.getItem("caa_lang") as Lang) || "EN";
-      if (LANGS.includes(saved)) setLang(saved);
-    } catch {}
-  }, []);
-
-  const cycleLang = () => {
-    const next = LANGS[(LANGS.indexOf(lang) + 1) % LANGS.length];
-    setLang(next);
-    try { localStorage.setItem("caa_lang", next); } catch {}
-    pushToast({ type: "info", title: "Language preference saved", message: next === "EN" ? "English" : next === "SW" ? "Kiswahili" : "Luganda" });
-  };
 
   const navLinks = [
     { to: "/",          label: "Home" },
@@ -150,14 +132,6 @@ export function Navbar() {
             >
               <Search className="h-3.5 w-3.5" />
             </button>
-            <button
-              onClick={cycleLang}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-caa-body/70 border border-caa-border rounded-md hover:border-caa-navy hover:text-caa-navy transition-colors"
-              aria-label="Change language"
-            >
-              <Globe className="h-3 w-3" /> {lang}
-            </button>
-
             {auth.isLoggedIn ? (
               <div className="flex items-center gap-2 ml-1">
                 <span className="h-8 w-8 rounded-full bg-caa-navy text-white flex items-center justify-center text-xs font-bold">

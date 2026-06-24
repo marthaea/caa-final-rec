@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { MapPin, Banknote, Calendar, Bookmark, BookmarkCheck, Sparkles } from "lucide-react";
+import { MapPin, Calendar, Bookmark, BookmarkCheck, Sparkles } from "lucide-react";
 import { useApp, type Job } from "@/context/AppContext";
 
 const SAVED_KEY = "caa_saved_jobs_v1";
@@ -55,7 +55,6 @@ export function JobCard({ job }: { job: Job }) {
       <h3 className="font-bold text-lg text-caa-body leading-snug">{job.title}</h3>
       <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-caa-muted">
         <span className="flex items-center gap-1.5"><MapPin className="h-4 w-4 text-caa-light" />{job.location}</span>
-        <span className="flex items-center gap-1.5"><Banknote className="h-4 w-4 text-caa-light" />{job.salary}</span>
       </div>
       <div className="text-[11px] text-caa-muted flex flex-wrap gap-x-3 gap-y-1">
         <span>Min age <span className="text-caa-body font-medium">{job.minAge}</span></span>

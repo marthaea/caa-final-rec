@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { Search } from "lucide-react";
 import { JobCard } from "@/components/JobCard";
 import { useApp } from "@/context/AppContext";
 
@@ -28,14 +29,20 @@ const DEPT_TABS = [
 function VacanciesPage() {
   const { jobs, canSeeJob, auth } = useApp();
   const [active, setActive] = useState("all");
+  const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
   useEffect(() => {
     setLoading(true);
     const t = setTimeout(() => setLoading(false), 380);
     return () => clearTimeout(t);
   }, [active]);
-  const visible = jobs.filter(canSeeJob);
-  const filtered = active === "all" ? visible : visible.filter((j) => j.deptKey === active);
+  const visible = useMemo(() => jobs.filter(canSeeJob), [jobs, canSeeJob]);
+  const byTab = active === "all" ? visible : visible.filter((j) => j.deptKey === active);
+  const filtered = useMemo(() => {
+    if (!q) return byTab;
+    const lq = q.toLowerCase();
+    return byTab.filter((j) => (j.title + " " + j.dept + " " + j.location + " " + j.salaryBand).toLowerCase().includes(lq));
+  }, [byTab, q]);
   const tabCount = (key: string) => key === "all" ? visible.length : visible.filter((j) => j.deptKey === key).length;
   const tabs = DEPT_TABS.filter((t) => tabCount(t.key) > 0);
 
@@ -50,6 +57,15 @@ function VacanciesPage() {
               <span className="ml-2 inline-block px-2 py-0.5 rounded-full bg-white/15 text-white text-[11px]">Internal access</span>
             )}
           </p>
+          <div className="mt-5 relative max-w-lg">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50 pointer-events-none" />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search by title, department or keyword…"
+              className="w-full pl-10 pr-4 py-2.5 text-sm rounded-md bg-white/10 border border-white/30 text-white placeholder-white/50 focus:outline-none focus:border-white"
+            />
+          </div>
         </div>
       </div>
 
@@ -87,7 +103,9 @@ function VacanciesPage() {
               : filtered.map((j) => <JobCard key={j.id} job={j} />)}
           </div>
           {!loading && filtered.length === 0 && (
-            <p className="text-center text-caa-muted py-10">No vacancies in this category.</p>
+            <p className="text-center text-caa-muted py-10">
+              {q ? `No vacancies match "${q}".` : "No vacancies in this category."}
+            </p>
           )}
         </div>
       </div>
