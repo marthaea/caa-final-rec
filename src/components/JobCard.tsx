@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { MapPin, Calendar, Bookmark, BookmarkCheck, Sparkles } from "lucide-react";
+import { MapPin, Calendar, Bookmark, BookmarkCheck } from "lucide-react";
 import { useApp, type Job } from "@/context/AppContext";
 
 const SAVED_KEY = "caa_saved_jobs_v1";
@@ -11,9 +11,6 @@ function readSaved(): number[] {
 function writeSaved(ids: number[]) {
   try { localStorage.setItem(SAVED_KEY, JSON.stringify(ids)); } catch {}
 }
-/* Deterministic pseudo-random match score per job, 68–96. */
-function matchFor(id: number) { return 68 + ((id * 37) % 29); }
-
 export function JobCard({ job }: { job: Job }) {
   const { pushToast } = useApp();
   const navigate = useNavigate();
@@ -32,8 +29,6 @@ export function JobCard({ job }: { job: Job }) {
     navigate({ to: "/job", search: { jobId: job.id } });
   };
 
-  const score = matchFor(job.id);
-
   return (
     <div
       onClick={handleApply}
@@ -48,9 +43,6 @@ export function JobCard({ job }: { job: Job }) {
         {job.visibility === "internal" && (
           <span className="px-2 py-0.5 rounded-full bg-caa-navy-2 text-white text-[10px] font-semibold">Internal only</span>
         )}
-        <span className="ml-auto inline-flex items-center gap-1 text-[11px] font-semibold text-caa-navy" title="Estimated profile match">
-          <Sparkles className="h-3 w-3" /> {score}% match
-        </span>
       </div>
       <h3 className="font-bold text-lg text-caa-body leading-snug">{job.title}</h3>
       <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-caa-muted">

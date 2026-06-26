@@ -22,11 +22,29 @@ export type Notification = {
   type: "shortlisted" | "declined" | "interview" | "offered" | "info";
 };
 
+export type SentEmail = {
+  id: number;
+  to: string;
+  candidateName: string;
+  subject: string;
+  body: string;
+  sentAt: string;
+  trigger: string;
+  jobTitle: string;
+};
+
+export type ScreeningQuestion = {
+  id: string;
+  text: string;
+  type: "qualifier" | "disqualifier";
+};
+
 export type JobCriteria = {
   jobId: number;
   minCgpa?: number;
   requiredKeywords: string[];
   notes?: string;
+  screeningQuestions?: ScreeningQuestion[];
 };
 
 export type PermissionOverride = {
@@ -175,6 +193,9 @@ type Ctx = {
   saveCriteria: (c: JobCriteria) => void;
   permissionOverrides: PermissionOverride[];
   savePermissionOverride: (p: PermissionOverride) => void;
+  sentEmails: SentEmail[];
+  logEmail: (e: Omit<SentEmail, "id" | "sentAt">) => void;
+  clearEmailLog: () => void;
 };
 
 const AppCtx = createContext<Ctx | null>(null);
@@ -225,7 +246,97 @@ const JOBS: Job[] = [
   { id: 14, abbr: "AIS", title: "Internal — Principal, Aeronautical Information Services", dept: "Operations", deptKey: "ops", location: "Entebbe Airport", salary: "UGX 4.5M–6.0M", salaryBand: "UG3", type: "Full-time", closes: "Jul 22, 2026", closesAt: "2026-07-22", visibility: "internal", minAge: 28, requiredExperience: 6, requiredQualification: "Degree", description: "Open to verified CAA staff only." },
 ];
 
+// ─── Seed application generator (~900 realistic Ugandan applicants) ───────────
+
+function lcg(s: number): number { return (((s * 1664525) + 1013904223) >>> 0); }
+
+function generateSeedApplications(): Application[] {
+  const M = ["Samuel","Robert","John","James","David","Peter","Emmanuel","Joseph","Charles","Michael","Daniel","George","Richard","Patrick","Stephen","Francis","Andrew","William","Christopher","Moses","Paul","Mark","Henry","Joshua","Benjamin","Isaac","Lawrence","Gerald","Ronald","Ivan","Martin","Simon","Philip","Anthony","Alfred","Raymond","Vincent","Godfrey","Herbert","Dickson","Rogers","Apollo","Caleb","Joel","Amos","Pius","Enoch","Gilbert","Nelson","Dixon","Rashid","Hassan","Ibrahim","Yusuf","Abbas","Karim","Bosco","Innocent","Ambrose","Cyprian","Fabian","Leornard"];
+  const F = ["Mary","Sarah","Grace","Florence","Patricia","Christine","Agnes","Anita","Esther","Brenda","Gloria","Stella","Harriet","Doreen","Irene","Joan","Judith","Sharon","Caroline","Victoria","Juliet","Beatrice","Rebecca","Susan","Dorothy","Lydia","Miriam","Winfred","Diana","Josephine","Hellen","Anne","Margaret","Catherine","Ruth","Phiona","Olive","Flavia","Jacqueline","Rosemary","Evelyn","Lillian","Robinah","Winnie","Zainab","Aisha","Fatuma","Halima","Immaculate","Dorcas","Barbra","Mercy","Patience","Perpetua","Scholastica","Veronicah","Assumpta","Cissy","Ritah","Norah","Daphne"];
+  const SN = ["Mukasa","Ssali","Nkutu","Bukenya","Okello","Opio","Atim","Achola","Namukasa","Nakamya","Namutebi","Kiggundu","Mugisha","Ssebayiga","Wanyama","Nakazibwe","Nassali","Abalo","Nakiganda","Kizito","Musoke","Lutalo","Ssekamwa","Nsubuga","Balaba","Muwanga","Katumba","Nkwanzi","Acen","Apiyo","Nansubuga","Nabirye","Nakigozi","Nanteza","Nambi","Nabukenya","Nalwoga","Nabwire","Nabukalu","Oulanyah","Kagolo","Lunkuse","Sekajja","Muliisa","Mulindwa","Mutyaba","Mubiru","Ddungu","Kyeyune","Kiyingi","Kibuuka","Kasozi","Katende","Kamya","Kabuga","Kayiwa","Kalanzi","Kalule","Nyanzi","Nyakato","Tumwebaze","Tuhaise","Tugume","Tusiime","Tweheyo","Twesigye","Ahimbisibwe","Akankwasa","Akello","Amuge","Okwir","Odongo","Obua","Ochola","Opiro","Olweny","Omara","Ojok","Ogwal","Ouma","Owino","Onyango","Drago","Amony","Chebet","Sang","Rutto","Were","Wekesa","Simiyu","Namiiro","Naluwooza","Namubiru","Nakitto","Nakintu","Nakayiza","Nakkazi","Nakawunde","Ssemwanga","Ssempijja","Ssenoga","Ssengonzi","Ssentamu","Luyima","Lukyamuzi","Lubega","Lukwago","Lutwama","Mugerwa","Muyingo","Mukaaya","Mukalazi","Nambooze","Nankya","Nansamba","Nantumbwe","Babirye","Birungi","Byarugaba","Katureebe","Kabaale","Kabahenda","Kabugo","Rwamirama","Rwabwogo","Tibaijuka","Ayot","Apio","Aparo","Okumu","Oboth","Odomel","Okwonga","Ayiku"];
+  const UNIS = ["Makerere University","Kyambogo University","Mbarara University of Science & Technology","Uganda Christian University","Gulu University","Busitema University","Kampala International University","Uganda Management Institute","Kabale University","Nkumba University","Islamic University in Uganda","Uganda Martyrs University","Mountains of the Moon University","Civil Aviation Training College (CATC)"];
+  const DOM = ["gmail.com","gmail.com","gmail.com","gmail.com","gmail.com","yahoo.com","outlook.com","hotmail.com","gmail.com","gmail.com"];
+  const DATES = ["Jan 6, 2026","Jan 13, 2026","Jan 19, 2026","Jan 27, 2026","Feb 3, 2026","Feb 10, 2026","Feb 17, 2026","Feb 24, 2026","Mar 3, 2026","Mar 10, 2026","Mar 17, 2026","Mar 24, 2026","Apr 1, 2026","Apr 8, 2026","Apr 14, 2026","Apr 21, 2026","May 5, 2026","May 12, 2026","May 19, 2026","May 26, 2026","Jun 2, 2026","Jun 6, 2026","Jun 9, 2026","Jun 12, 2026","Jun 16, 2026","Jun 19, 2026","Jun 23, 2026"];
+
+  // Weighted status pool: 38 Pending, 24 Under Review, 16 Shortlisted, 9 Interview, 3 Offered, 2 Hired, 8 Declined = 100
+  const ST: ApplicationStatus[] = [
+    ...Array<ApplicationStatus>(38).fill("Pending"),
+    ...Array<ApplicationStatus>(24).fill("Under Review"),
+    ...Array<ApplicationStatus>(16).fill("Shortlisted"),
+    ...Array<ApplicationStatus>(9).fill("Interview"),
+    ...Array<ApplicationStatus>(3).fill("Offered"),
+    ...Array<ApplicationStatus>(2).fill("Hired"),
+    ...Array<ApplicationStatus>(8).fill("Declined"),
+  ];
+
+  type JS = { id: number; abbr: string; title: string; dept: string; n: number; isCgpa?: true };
+  const SPECS: JS[] = [
+    { id: 1,  abbr: "ATC",  title: "Senior Air Traffic Controller",                      dept: "Air Traffic Mgmt",  n: 80 },
+    { id: 2,  abbr: "ASI",  title: "Principal Safety Inspector (Airworthiness)",         dept: "Aviation Safety",   n: 65 },
+    { id: 3,  abbr: "SYS",  title: "Systems Administrator",                              dept: "ICT & Systems",     n: 88 },
+    { id: 4,  abbr: "FIN",  title: "Finance Officer (Revenue Assurance)",                dept: "Finance & Admin",   n: 83 },
+    { id: 5,  abbr: "LEG",  title: "Legal Counsel (Aviation Regulations)",               dept: "Legal",             n: 42 },
+    { id: 6,  abbr: "ATT",  title: "ATC Trainee (Graduate Entry)",                       dept: "Air Traffic Mgmt",  n: 142, isCgpa: true },
+    { id: 7,  abbr: "INT",  title: "Internal — Manager, Aerodrome Operations",           dept: "Operations",        n: 21 },
+    { id: 8,  abbr: "ACO",  title: "Approach Control Officer",                           dept: "Air Traffic Mgmt",  n: 69 },
+    { id: 9,  abbr: "FOI",  title: "Flight Operations Inspector",                        dept: "Aviation Safety",   n: 58 },
+    { id: 10, abbr: "DGI",  title: "Dangerous Goods Inspector",                          dept: "Aviation Safety",   n: 46 },
+    { id: 11, abbr: "ASec", title: "Aviation Security Inspector",                        dept: "Aviation Safety",   n: 52 },
+    { id: 12, abbr: "PRO",  title: "Procurement Officer",                                dept: "Finance & Admin",   n: 70 },
+    { id: 13, abbr: "NET",  title: "Network Engineer",                                   dept: "ICT & Systems",     n: 73 },
+    { id: 14, abbr: "AIS",  title: "Internal — Principal, Aeronautical Information Services", dept: "Operations",  n: 18 },
+  ];
+  // Total generated: 80+65+88+83+42+142+21+69+58+46+52+70+73+18 = 907
+
+  const apps: Application[] = [];
+  let s = 0x4A3B2C1D;
+  let nextId = 100;
+
+  for (const spec of SPECS) {
+    const usedEmails = new Set<string>();
+    for (let k = 0; k < spec.n; k++) {
+      s = lcg(s + k * 17);
+      const female = (s % 3) === 0;
+      const pool = female ? F : M;
+      s = lcg(s); const fn = pool[s % pool.length];
+      s = lcg(s); const ln = SN[s % SN.length];
+      s = lcg(s); const st = ST[s % ST.length];
+      s = lcg(s);
+      const comp = st === "Pending" ? 45 + (s % 56)
+                 : st === "Under Review" ? 68 + (s % 33)
+                 : st === "Declined" ? 30 + (s % 65)
+                 : 87 + (s % 14);
+      s = lcg(s); const dt = DATES[s % DATES.length];
+      s = lcg(s); const dom = DOM[s % DOM.length];
+
+      // Unique-ify email
+      const base = `${fn.toLowerCase().replace(/[^a-z]/g,"")}.${ln.toLowerCase().replace(/[^a-z]/g,"")}`;
+      let em = `${base}@${dom}`;
+      if (usedEmails.has(em)) em = `${base}${k}@${dom}`;
+      usedEmails.add(em);
+
+      const app: Application = {
+        id: nextId++, jobId: spec.id, abbr: spec.abbr, title: spec.title,
+        dept: spec.dept, date: dt, status: st, completion: comp,
+        candidateName: `${fn} ${ln}`, candidateEmail: em,
+      };
+
+      if (spec.isCgpa) {
+        s = lcg(s);
+        app.cgpa = parseFloat(Math.max(2.0, Math.min(5.0, 2.0 + (s % 31) / 10)).toFixed(1));
+        s = lcg(s);
+        app.university = UNIS[s % UNIS.length];
+      }
+
+      apps.push(app);
+    }
+  }
+
+  return apps;
+}
+
 const APPLICATIONS: Application[] = [
+  // ── Pinned demo entries (IDs 1–8) — specific scenarios kept intact ───────
   { id: 1, jobId: 1, abbr: "ATC", title: "Senior Air Traffic Controller", dept: "Air Traffic Mgmt", date: "Jun 3, 2026", status: "Shortlisted", completion: 100, candidateName: "John Bukenya", candidateEmail: "j.bukenya@gmail.com" },
   { id: 2, jobId: 4, abbr: "FIN", title: "Finance Officer (Revenue Assurance)", dept: "Finance & Admin", date: "May 28, 2026", status: "Under Review", completion: 85, candidateName: "Mary Auma", candidateEmail: "m.auma@gmail.com" },
   { id: 3, jobId: 3, abbr: "SYS", title: "Systems Administrator", dept: "ICT & Systems", date: "May 15, 2026", status: "Pending", completion: 60, candidateName: "Peter Nkutu", candidateEmail: "p.nkutu@gmail.com" },
@@ -234,6 +345,8 @@ const APPLICATIONS: Application[] = [
   { id: 6, jobId: 6, abbr: "ATT", title: "ATC Trainee (Graduate Entry)", dept: "Air Traffic Mgmt", date: "Jun 3, 2026", status: "Pending", completion: 80, candidateName: "Ivan Mucunguzi", candidateEmail: "i.mucunguzi@student.ucu.ac.ug", cgpa: 3.9, university: "Uganda Christian University" },
   { id: 7, jobId: 6, abbr: "ATT", title: "ATC Trainee (Graduate Entry)", dept: "Air Traffic Mgmt", date: "Jun 5, 2026", status: "Pending", completion: 70, candidateName: "Stella Nabirye", candidateEmail: "s.nabirye@student.must.ac.ug", cgpa: 3.6, university: "Mbarara University" },
   { id: 8, jobId: 6, abbr: "ATT", title: "ATC Trainee (Graduate Entry)", dept: "Air Traffic Mgmt", date: "Jun 7, 2026", status: "Declined", completion: 55, candidateName: "Ronald Oulanyah", candidateEmail: "r.oulanyah@student.gulu.ac.ug", cgpa: 2.8, university: "Gulu University" },
+  // ── Generated bulk (IDs 100+, ~907 entries) ──────────────────────────────
+  ...generateSeedApplications(),
 ];
 
 const DEFAULT_SETTINGS: AdminSettings = {
@@ -255,6 +368,7 @@ const SETTINGS_KEY   = "caa_settings_v1";
 const NOTIF_KEY      = "caa_notif_v1";
 const CRITERIA_KEY   = "caa_criteria_v1";
 const PERMS_KEY      = "caa_perms_v1";
+const EMAILS_KEY     = "caa_emails_v1";
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
@@ -272,6 +386,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [criteria, setCriteria] = useState<JobCriteria[]>([]);
   const [permissionOverrides, setPermissionOverrides] = useState<PermissionOverride[]>([]);
+  const [sentEmails, setSentEmails] = useState<SentEmail[]>([]);
 
   useEffect(() => {
     try {
@@ -295,6 +410,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (rcr) setCriteria(JSON.parse(rcr));
       const rp = localStorage.getItem(PERMS_KEY);
       if (rp) setPermissionOverrides(JSON.parse(rp));
+      const rem = localStorage.getItem(EMAILS_KEY);
+      if (rem) setSentEmails(JSON.parse(rem));
     } catch {}
   }, []);
 
@@ -430,6 +547,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try { localStorage.setItem(PERMS_KEY, JSON.stringify(next)); } catch {}
   };
 
+  const logEmail: Ctx["logEmail"] = (e) => {
+    const entry: SentEmail = { ...e, id: Date.now(), sentAt: new Date().toISOString() };
+    setSentEmails((prev) => {
+      const next = [entry, ...prev];
+      try { localStorage.setItem(EMAILS_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+
+  const clearEmailLog: Ctx["clearEmailLog"] = () => {
+    setSentEmails([]);
+    try { localStorage.removeItem(EMAILS_KEY); } catch {}
+  };
+
   return (
     <AppCtx.Provider
       value={{
@@ -445,6 +576,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         notifications, sendNotification, markNotificationRead,
         criteria, saveCriteria,
         permissionOverrides, savePermissionOverride,
+        sentEmails, logEmail, clearEmailLog,
       }}
     >
       {children}

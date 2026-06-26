@@ -69,9 +69,15 @@ export function Navbar() {
   return (
     <header className="sticky top-0 z-40">
       {/* ── Top bar ─────────────────────────────────────────── */}
-      <div className="bg-[#111111]">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 h-9 flex items-center justify-between">
-          <span className="text-white text-xs font-semibold tracking-wide">
+      <div className="relative bg-[#111111] overflow-hidden h-9">
+        {/* Blue left section with diagonal right edge */}
+        <div
+          aria-hidden
+          className="absolute inset-y-0 left-0 bg-[#1565C0]"
+          style={{ right: "48%", clipPath: "polygon(0 0, 100% 0, calc(100% - 28px) 100%, 0 100%)" }}
+        />
+        <div className="relative mx-auto max-w-7xl px-4 sm:px-6 h-9 flex items-center justify-between z-10">
+          <span className="text-white text-[11px] font-bold uppercase tracking-wider whitespace-nowrap">
             Uganda Civil Aviation Authority
           </span>
           <div className="flex items-center gap-3">

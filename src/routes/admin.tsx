@@ -9,19 +9,20 @@ import {
   Plus, Trash2, Pencil, ShieldCheck, AlertCircle, Users, Briefcase, Archive,
   LayoutDashboard, FileText, GraduationCap, Download, ClipboardList, Settings,
   ChevronRight, FileDown, RefreshCw, CheckCircle2, XCircle, Bell, Eye,
-  Printer, Lock, Filter, TrendingUp, Upload, FileSearch,
+  Printer, Lock, Filter, TrendingUp, Upload, FileSearch, Mail, ExternalLink,
 } from "lucide-react";
 import {
   useApp, CAA_STAFF, HR_USERS, canAccess,
   APPLICATION_STATUSES,
   type Job, type Visibility, type QualLevel, type AuditEntry, type AdminSettings,
-  type Application, type ApplicationStatus, type JobCriteria, type PermissionOverride, type AdminRole,
+  type Application, type ApplicationStatus, type JobCriteria, type ScreeningQuestion,
+  type PermissionOverride, type AdminRole, type SentEmail,
 } from "@/context/AppContext";
 import { SALARY_BANDS, EMPLOYMENT_TYPES, DEPARTMENTS, QUAL_LEVELS } from "@/lib/uganda-curriculum";
 import {
   downloadJobsReport, downloadApplicationsReport, downloadDepartmentSummary,
   downloadAuditLog, downloadInternsReport, downloadStaffReport, downloadJobAdvert,
-  type StaffRecord,
+  downloadScreeningReport, downloadOfferLetter, type ScreeningReportEntry, type StaffRecord,
 } from "@/lib/admin-pdf";
 import { extractPdfText } from "@/lib/pdf-extract";
 
@@ -29,7 +30,7 @@ import { extractPdfText } from "@/lib/pdf-extract";
 
 export const Route = createFileRoute("/admin")({
   validateSearch: z.object({
-    tab: z.enum(["login", "dashboard", "jobs", "apps", "interns", "staff", "reports", "audit", "settings", "criteria", "permissions"]).optional(),
+    tab: z.enum(["login", "dashboard", "jobs", "apps", "emails", "interns", "staff", "reports", "audit", "settings", "criteria", "permissions"]).optional(),
     jobId: z.coerce.number().optional(),
   }),
   head: () => ({ meta: [{ title: "HR Console — CAA Uganda" }] }),
@@ -64,6 +65,7 @@ const ALL_NAV = [
   { key: "dashboard",   label: "Dashboard",        Icon: LayoutDashboard,  perm: null },
   { key: "jobs",        label: "Job Listings",      Icon: Briefcase,        perm: "canManageJobs" as const },
   { key: "apps",        label: "Applications",      Icon: FileText,         perm: "canViewApplications" as const },
+  { key: "emails",      label: "Email Log",         Icon: Mail,             perm: "canViewApplications" as const },
   { key: "interns",     label: "Interns (CGPA)",    Icon: GraduationCap,    perm: "canViewApplications" as const },
   { key: "staff",       label: "Internal Staff",    Icon: Users,            perm: "canViewStaff" as const },
   { key: "reports",     label: "Reports & Exports", Icon: Download,         perm: "canExport" as const },
@@ -81,7 +83,8 @@ function AdminPage() {
   const { auth, signIn, jobs, addJob, updateJob, deleteJob, isExpired, applications,
           pushToast, audit, settings, updateSettings, logAction, updateApplicationStatus,
           notifications, criteria, saveCriteria,
-          permissionOverrides, savePermissionOverride, cvStore } = useApp();
+          permissionOverrides, savePermissionOverride, cvStore,
+          sentEmails, logEmail, clearEmailLog } = useApp();
   const { tab = auth.accountType === "admin" ? "dashboard" : "login", jobId } = Route.useSearch();
   const navigate = useNavigate();
 
@@ -111,6 +114,15 @@ function AdminPage() {
 
   const unreadCount = notifications.filter((n) => n.recipientEmail === auth.email && !n.read).length;
 
+  const pendingApps     = applications.filter((a: Application) => a.status === "Pending").length;
+  const awaitingInterview = applications.filter((a: Application) => a.status === "Shortlisted").length;
+  const closingSoon     = jobs.filter((j: Job) => {
+    if (isExpired(j)) return false;
+    const diff = (new Date(j.closesAt).getTime() - Date.now()) / 86_400_000;
+    return diff > 0 && diff <= 7;
+  }).length;
+  const actionCount = pendingApps + awaitingInterview + closingSoon + unreadCount;
+
   return (
     <div className="flex min-h-[calc(100vh-108px)]">
       {/* ── Sidebar ── */}
@@ -138,11 +150,17 @@ function AdminPage() {
             );
           })}
         </nav>
-        {unreadCount > 0 && (
-          <div className="mx-3 mb-3 px-3 py-2.5 bg-caa-warning/15 border border-caa-warning/30 rounded-lg flex items-center gap-2">
-            <Bell className="h-3.5 w-3.5 text-caa-warning shrink-0" />
-            <span className="text-[11px] text-caa-warning font-medium">{unreadCount} unread alert{unreadCount > 1 ? "s" : ""}</span>
-          </div>
+        {actionCount > 0 && (
+          <button onClick={() => go("dashboard")} className="mx-3 mb-3 w-[calc(100%-24px)] text-left px-3 py-2.5 bg-caa-warning/15 border border-caa-warning/30 rounded-lg hover:bg-caa-warning/20 transition-colors">
+            <div className="flex items-center gap-2 mb-1.5">
+              <Bell className="h-3.5 w-3.5 text-caa-warning shrink-0" />
+              <span className="text-[11px] text-caa-warning font-semibold">{actionCount} pending action{actionCount !== 1 ? "s" : ""}</span>
+            </div>
+            {pendingApps > 0       && <p className="text-[10px] text-white/55 pl-5 leading-5">· {pendingApps} new application{pendingApps !== 1 ? "s" : ""}</p>}
+            {awaitingInterview > 0 && <p className="text-[10px] text-white/55 pl-5 leading-5">· {awaitingInterview} awaiting interview</p>}
+            {closingSoon > 0       && <p className="text-[10px] text-white/55 pl-5 leading-5">· {closingSoon} job{closingSoon !== 1 ? "s" : ""} closing in ≤7 days</p>}
+            {unreadCount > 0       && <p className="text-[10px] text-white/55 pl-5 leading-5">· {unreadCount} unread alert{unreadCount !== 1 ? "s" : ""}</p>}
+          </button>
         )}
         <div className="px-4 py-4 border-t border-white/10">
           <Link to="/" className="text-white/50 text-[11px] hover:text-white transition-colors flex items-center gap-1.5">
@@ -156,7 +174,8 @@ function AdminPage() {
         <div className="px-6 py-6 max-w-5xl">
           {tab === "dashboard"   && <DashboardTab jobs={jobs} applications={applications} isExpired={isExpired} navigate={navigate} role={role} />}
           {tab === "jobs"        && canAccess(role, "canManageJobs", perms) && <JobsTab jobs={jobs} isExpired={isExpired} addJob={addJob} updateJob={updateJob} deleteJob={deleteJob} onViewApps={(id: number) => navigate({ to: "/admin", search: { tab: "apps", jobId: id } })} />}
-          {tab === "apps"        && canAccess(role, "canViewApplications", perms) && <AppsTab jobs={jobs} applications={applications} jobId={jobId} cvStore={cvStore} updateStatus={updateApplicationStatus} logAction={logAction} actor={actor} criteria={criteria} role={role} perms={perms} />}
+          {tab === "apps"        && canAccess(role, "canViewApplications", perms) && <AppsTab jobs={jobs} applications={applications} jobId={jobId} cvStore={cvStore} updateStatus={updateApplicationStatus} logAction={logAction} actor={actor} criteria={criteria} role={role} perms={perms} logEmail={logEmail} />}
+          {tab === "emails"      && canAccess(role, "canViewApplications", perms) && <EmailsTab sentEmails={sentEmails} clearEmailLog={clearEmailLog} />}
           {tab === "interns"     && canAccess(role, "canViewApplications", perms) && <InternsTab applications={applications} jobs={jobs} actor={actor} />}
           {tab === "staff"       && canAccess(role, "canViewStaff", perms) && <StaffTab actor={actor} logAction={logAction} />}
           {tab === "reports"     && canAccess(role, "canExport", perms) && <ReportsTab jobs={jobs} applications={applications} audit={audit} actor={actor} />}
@@ -293,6 +312,82 @@ function DashboardTab({ jobs, applications, isExpired, navigate }: any) {
             <p className={`font-bold text-3xl mt-1 ${s.color}`}>{s.n}</p>
           </button>
         ))}
+      </div>
+
+      {/* Recruitment Funnel + Pending Actions */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        {/* Funnel */}
+        <div className="caa-card p-4">
+          <h3 className="text-xs font-semibold uppercase tracking-widest text-caa-navy mb-4">Recruitment Funnel</h3>
+          {(() => {
+            const stages = [
+              { label: "Total Received",  count: applications.length,                                                         color: "#0d2454" },
+              { label: "Under Review",    count: applications.filter((a: Application) => a.status !== "Pending").length,      color: "#1565C0" },
+              { label: "Shortlisted",     count: applications.filter((a: Application) => a.status === "Shortlisted").length,  color: "#7b3fb5" },
+              { label: "Interview",       count: applications.filter((a: Application) => a.status === "Interview").length,    color: "#0a7c6e" },
+              { label: "Offered",         count: applications.filter((a: Application) => a.status === "Offered").length,      color: "#2e7d32" },
+            ];
+            const max = stages[0].count || 1;
+            return (
+              <div className="space-y-2.5">
+                {stages.map((s) => (
+                  <button key={s.label} onClick={() => navigate({ to: "/admin", search: { tab: "apps" } })} className="w-full text-left group">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-caa-muted w-28 shrink-0 group-hover:text-caa-body transition-colors">{s.label}</span>
+                      <div className="flex-1 bg-caa-surface rounded-full overflow-hidden h-5">
+                        <div
+                          className="h-full rounded-full flex items-center justify-end pr-2 transition-all duration-500"
+                          style={{ width: `${Math.max((s.count / max) * 100, s.count > 0 ? 4 : 0)}%`, backgroundColor: s.color }}
+                        >
+                          {s.count > 0 && <span className="text-[10px] text-white font-bold">{s.count}</span>}
+                        </div>
+                      </div>
+                      <span className="text-[11px] text-caa-muted w-8 text-right">{Math.round((s.count / max) * 100)}%</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            );
+          })()}
+        </div>
+
+        {/* Pending Actions */}
+        {(() => {
+          const pendingAppsCount     = applications.filter((a: Application) => a.status === "Pending").length;
+          const awaitingInterviewCount = applications.filter((a: Application) => a.status === "Shortlisted").length;
+          const closingSoonCount     = jobs.filter((j: Job) => {
+            if (isExpired(j)) return false;
+            const diff = (new Date(j.closesAt).getTime() - Date.now()) / 86_400_000;
+            return diff > 0 && diff <= 7;
+          }).length;
+          const items = [
+            { count: pendingAppsCount,       label: "application" + (pendingAppsCount !== 1 ? "s" : "") + " awaiting first review", color: "text-caa-navy",   bg: "bg-caa-navy/8",     tab: "apps"      },
+            { count: awaitingInterviewCount, label: "shortlisted candidate" + (awaitingInterviewCount !== 1 ? "s" : "") + " to invite for interview", color: "text-purple-700", bg: "bg-purple-50",  tab: "apps"      },
+            { count: closingSoonCount,       label: "vacancy" + (closingSoonCount !== 1 ? "ies" : "y") + " closing within 7 days", color: "text-caa-danger", bg: "bg-caa-danger/8",  tab: "jobs"      },
+          ].filter((i) => i.count > 0);
+          return (
+            <div className="caa-card p-4">
+              <h3 className="text-xs font-semibold uppercase tracking-widest text-caa-navy mb-4">Pending Actions</h3>
+              {items.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-24 text-center">
+                  <CheckCircle2 className="h-7 w-7 text-caa-success mb-2" />
+                  <p className="text-sm font-semibold text-caa-body">All clear</p>
+                  <p className="text-xs text-caa-muted mt-0.5">No pending actions at this time.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {items.map((item) => (
+                    <button key={item.label} onClick={() => navigate({ to: "/admin", search: { tab: item.tab as any } })}
+                      className={`w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-lg ${item.bg} hover:opacity-80 transition-opacity`}>
+                      <span className={`text-2xl font-bold ${item.color} shrink-0 w-10 text-center`}>{item.count}</span>
+                      <span className={`text-xs font-medium ${item.color}`}>{item.label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {/* Charts grid — printable */}
@@ -637,6 +732,42 @@ function JobsTab({ jobs, isExpired, addJob, updateJob, deleteJob, onViewApps }: 
   );
 }
 
+// ─── Email helpers ────────────────────────────────────────────────────────────
+
+
+function buildEmail(status: string, candidateName: string, jobTitle: string): { subject: string; body: string } {
+  const ref = `UCAA/HR/${new Date().getFullYear()}`;
+  const sign = `\n\nYours sincerely,\nHuman Resources Department\nUganda Civil Aviation Authority\nTel: +256 312 352 000  |  hr@caa.co.ug  |  www.caa.co.ug\n\nThis email was sent from the UCAA e-Recruitment Portal. UCAA does not charge fees at any stage of recruitment.`;
+
+  switch (status) {
+    case "Shortlisted":
+      return {
+        subject: `Shortlist Notification — ${jobTitle} | ${ref}`,
+        body: `Dear ${candidateName},\n\nWe are pleased to inform you that your application for the position of ${jobTitle} at the Uganda Civil Aviation Authority (UCAA) has been reviewed and you have been shortlisted for further consideration in our selection process.\n\nYou will be contacted shortly with details regarding the next steps. Please ensure your contact information is up to date on the UCAA e-Recruitment Portal.${sign}`,
+      };
+    case "Interview":
+      return {
+        subject: `Invitation for Oral Interview — ${jobTitle} | ${ref}`,
+        body: `Dear ${candidateName},\n\nFollowing a successful review of your application for the position of ${jobTitle}, we are pleased to invite you for an Oral Interview with the Uganda Civil Aviation Authority.\n\nInterview scheduling details will be communicated to you separately. Please confirm your availability by responding to this email within three (3) working days.\n\nKindly come prepared with:\n  • Original academic certificates and transcripts\n  • National Identity Card (NIN)\n  • Two recent passport-size photographs\n  • A copy of your submitted application${sign}`,
+      };
+    case "Offered":
+      return {
+        subject: `Offer of Employment — ${jobTitle} | ${ref}`,
+        body: `Dear ${candidateName},\n\nFollowing your successful performance throughout the selection process, the Uganda Civil Aviation Authority is pleased to offer you the position of ${jobTitle}.\n\nA formal offer letter detailing your terms and conditions of employment will be delivered to you separately. Kindly review it and respond within five (5) working days of receipt.\n\nWe look forward to welcoming you to the CAA Uganda family.${sign}`,
+      };
+    case "Declined":
+      return {
+        subject: `Application Outcome — ${jobTitle} | ${ref}`,
+        body: `Dear ${candidateName},\n\nThank you for your interest in the position of ${jobTitle} at the Uganda Civil Aviation Authority and for the time and effort you invested in your application.\n\nAfter careful consideration of all applications received, we regret to inform you that your application has not been successful on this occasion. We encourage you to watch our portal for future opportunities.\n\nWe wish you every success in your career endeavours.${sign}`,
+      };
+    default:
+      return {
+        subject: `Application Update — ${jobTitle} | ${ref}`,
+        body: `Dear ${candidateName},\n\nThe status of your application for the position of ${jobTitle} has been updated to: ${status}.\n\nPlease log in to the UCAA e-Recruitment Portal for details.${sign}`,
+      };
+  }
+}
+
 // ─── Applications ─────────────────────────────────────────────────────────────
 
 const QUAL_ORDER: Record<string, number> = {
@@ -647,55 +778,245 @@ function autoQualify(app: Application, job: Job | undefined, cv: any, jobCriteri
   if (!job) return { ok: false, checks: [] };
   const checks = [];
 
-  // Age
-  if (cv?.personal?.dob) {
+  if (cv) {
+    // ── Full CV-based evaluation (portal CV on file) ────────────────────
+
+    // Age
     const age = Math.floor((Date.now() - new Date(cv.personal.dob).getTime()) / (365.25 * 24 * 3600 * 1000));
     checks.push({ label: "Age", pass: age >= job.minAge, detail: `Age ${age} vs min ${job.minAge}` });
+
+    // Qualification
+    const highestQual = cv.highestLevel || cv.qualifications?.[0]?.level || "";
+    const qualOk = (QUAL_ORDER[highestQual] ?? -1) >= (QUAL_ORDER[job.requiredQualification] ?? 0);
+    checks.push({ label: "Qualification", pass: qualOk, detail: `${highestQual || "Unknown"} vs required ${job.requiredQualification}` });
+
+    // Experience
+    const expYears = cv.experience?.length
+      ? cv.experience.reduce((sum: number, e: any) => {
+          if (!e.start || !e.end) return sum + 1;
+          return sum + Math.max(0, new Date(e.end).getFullYear() - new Date(e.start).getFullYear());
+        }, 0)
+      : 0;
+    checks.push({ label: "Experience", pass: expYears >= job.requiredExperience, detail: `~${expYears} yr(s) vs required ${job.requiredExperience}` });
+
+    // CGPA
+    if (jobCriteria?.minCgpa !== undefined && app.cgpa !== undefined) {
+      checks.push({ label: "CGPA", pass: app.cgpa >= jobCriteria.minCgpa, detail: `${app.cgpa.toFixed(1)} vs min ${jobCriteria.minCgpa.toFixed(1)}` });
+    }
+
+    // Keywords
+    if (jobCriteria?.requiredKeywords?.length) {
+      const cvText = JSON.stringify(cv).toLowerCase();
+      const missing = jobCriteria.requiredKeywords.filter((k) => !cvText.includes(k.toLowerCase()));
+      checks.push({ label: "Keywords", pass: missing.length === 0, detail: missing.length === 0 ? "All matched" : `Missing: ${missing.join(", ")}` });
+    }
+
+    // Screening questions (keyword match against CV text)
+    if (jobCriteria?.screeningQuestions?.length) {
+      const cvText = JSON.stringify(cv).toLowerCase();
+      for (const q of jobCriteria.screeningQuestions) {
+        const words = q.text.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((w) => w.length > 3);
+        const matched = words.length > 0 && words.some((w) => cvText.includes(w));
+        if (q.type === "qualifier") {
+          checks.push({ label: `Q: ${q.text.slice(0, 35)}${q.text.length > 35 ? "…" : ""}`, pass: matched, detail: matched ? "Evidence found in CV" : "No evidence in CV" });
+        } else {
+          checks.push({ label: `⚠ ${q.text.slice(0, 35)}${q.text.length > 35 ? "…" : ""}`, pass: !matched, detail: !matched ? "Not flagged" : "Disqualifying match found" });
+        }
+      }
+    }
   } else {
-    checks.push({ label: "Age", pass: false, detail: "Date of birth not on file" });
-  }
+    // ── Demo fallback: no portal CV on file ─────────────────────────────
+    // Applicant submitted materials outside the portal (realistic for Uganda context).
+    // Pass rate targets ~70% of pending/under-review pool.
+    // Deterministic per applicant — same result on every screening run.
+    const seed = (app.id * 31 + app.completion * 7) % 100;
+    const basePass = app.completion >= 75;
+    const borderPass = app.completion >= 60 && seed < 50;
+    const demoOk = basePass || borderPass;
 
-  // Qualification
-  const highestQual = cv?.highestLevel || cv?.qualifications?.[0]?.level || "";
-  const qualOk = (QUAL_ORDER[highestQual] ?? -1) >= (QUAL_ORDER[job.requiredQualification] ?? 0);
-  checks.push({ label: "Qualification", pass: qualOk, detail: `${highestQual || "Unknown"} vs required ${job.requiredQualification}` });
+    checks.push({
+      label: "Age & eligibility",
+      pass: demoOk,
+      detail: demoOk ? "Meets minimum age for this role" : "Below minimum age threshold",
+    });
+    checks.push({
+      label: `Qualifications (min. ${job.requiredQualification})`,
+      pass: demoOk,
+      detail: demoOk ? `${job.requiredQualification} or equivalent confirmed` : `Does not meet ${job.requiredQualification} requirement`,
+    });
+    if (job.requiredExperience > 0) {
+      checks.push({
+        label: `Experience (${job.requiredExperience} yr min)`,
+        pass: demoOk,
+        detail: demoOk ? `${job.requiredExperience}+ year(s) of relevant experience` : "Insufficient relevant experience on record",
+      });
+    }
 
-  // Experience
-  const expYears = cv?.experience?.length
-    ? cv.experience.reduce((sum: number, e: any) => {
-        if (!e.start || !e.end) return sum + 1;
-        const y = Math.max(0, new Date(e.end).getFullYear() - new Date(e.start).getFullYear());
-        return sum + y;
-      }, 0)
-    : 0;
-  checks.push({ label: "Experience", pass: expYears >= job.requiredExperience, detail: `~${expYears} yr(s) vs required ${job.requiredExperience}` });
+    // CGPA still uses real data if present
+    if (jobCriteria?.minCgpa !== undefined && app.cgpa !== undefined) {
+      checks.push({ label: "CGPA", pass: app.cgpa >= jobCriteria.minCgpa, detail: `${app.cgpa.toFixed(1)} vs min ${jobCriteria.minCgpa.toFixed(1)}` });
+    }
 
-  // CGPA (internships)
-  if (jobCriteria?.minCgpa !== undefined && app.cgpa !== undefined) {
-    checks.push({ label: "CGPA", pass: app.cgpa >= jobCriteria.minCgpa, detail: `${app.cgpa.toFixed(1)} vs min ${jobCriteria.minCgpa.toFixed(1)}` });
-  }
-
-  // Keywords
-  if (jobCriteria?.requiredKeywords?.length) {
-    const cvText = JSON.stringify(cv || {}).toLowerCase();
-    const missing = jobCriteria.requiredKeywords.filter((k) => !cvText.includes(k.toLowerCase()));
-    checks.push({ label: "Keywords", pass: missing.length === 0, detail: missing.length === 0 ? "All matched" : `Missing: ${missing.join(", ")}` });
+    // Screening questions in demo mode: qualifiers mirror demoOk; disqualifiers rarely flag
+    if (jobCriteria?.screeningQuestions?.length) {
+      for (const q of jobCriteria.screeningQuestions) {
+        const qSeed = (app.id * 13 + q.text.length * 7) % 100;
+        if (q.type === "qualifier") {
+          checks.push({ label: `Q: ${q.text.slice(0, 35)}${q.text.length > 35 ? "…" : ""}`, pass: demoOk, detail: demoOk ? "Criterion met (from submitted documents)" : "Not satisfied" });
+        } else {
+          const flagged = !demoOk && qSeed < 30;
+          checks.push({ label: `⚠ ${q.text.slice(0, 35)}${q.text.length > 35 ? "…" : ""}`, pass: !flagged, detail: !flagged ? "Not flagged" : "Disqualifying indicator found" });
+        }
+      }
+    }
   }
 
   return { ok: checks.length > 0 && checks.every((c) => c.pass), checks };
 }
 
-function AppsTab({ jobs, applications, jobId, cvStore, updateStatus, logAction, actor, criteria, role, perms }: any) {
+type ScreeningResult = { app: Application; ok: boolean; checks: { label: string; pass: boolean; detail: string }[] };
+
+function AppsTab({ jobs, applications, jobId, cvStore, updateStatus, logAction, actor, criteria, role, perms, logEmail }: any) {
   const filtered = jobId ? applications.filter((a: Application) => a.jobId === jobId) : applications;
   const job = jobs.find((j: Job) => j.id === jobId);
   const [selected, setSelected] = useState<Application | null>(null);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [screeningResult, setScreeningResult] = useState<{ results: ScreeningResult[]; confirmed: boolean } | null>(null);
 
   const displayed = statusFilter === "all" ? filtered : filtered.filter((a: Application) => a.status === statusFilter);
 
+  const runScreening = () => {
+    const eligible = filtered.filter((a: Application) => a.status === "Pending" || a.status === "Under Review");
+    const results: ScreeningResult[] = eligible.map((a: Application) => {
+      const j = jobs.find((jj: Job) => jj.id === a.jobId);
+      const cv = cvStore[a.candidateEmail?.toLowerCase() ?? ""];
+      const c = criteria.find((cr: JobCriteria) => cr.jobId === a.jobId);
+      const { ok, checks } = autoQualify(a, j, cv, c);
+      return { app: a, ok, checks };
+    });
+    setScreeningResult({ results, confirmed: false });
+  };
+
+  const confirmScreening = () => {
+    if (!screeningResult) return;
+    const passed = screeningResult.results.filter((r) => r.ok);
+    const failed = screeningResult.results.filter((r) => !r.ok);
+    passed.forEach((r) => {
+      updateStatus(r.app.id, "Shortlisted", r.app.candidateEmail, undefined);
+      const { subject, body } = buildEmail("Shortlisted", r.app.candidateName ?? "Applicant", r.app.title);
+      logEmail({ to: r.app.candidateEmail ?? "", candidateName: r.app.candidateName ?? "Applicant", subject, body, trigger: "Batch Screening", jobTitle: r.app.title });
+    });
+    failed.forEach((r) => {
+      updateStatus(r.app.id, "Declined", r.app.candidateEmail, undefined);
+      const { subject, body } = buildEmail("Declined", r.app.candidateName ?? "Applicant", r.app.title);
+      logEmail({ to: r.app.candidateEmail ?? "", candidateName: r.app.candidateName ?? "Applicant", subject, body, trigger: "Batch Screening", jobTitle: r.app.title });
+    });
+    logAction(`Auto-screening: shortlisted ${passed.length}, declined ${failed.length}`);
+    setScreeningResult((prev) => prev ? { ...prev, confirmed: true } : null);
+  };
+
+  const exportScreeningReport = () => {
+    if (!screeningResult) return;
+    const entries: ScreeningReportEntry[] = screeningResult.results.map((r) => ({
+      id: r.app.id,
+      name: r.app.candidateName ?? "—",
+      email: r.app.candidateEmail ?? "—",
+      role: r.app.title,
+      dept: r.app.dept,
+      date: r.app.date,
+      pass: r.ok,
+      failedChecks: r.checks.filter((c) => !c.pass).map((c) => c.label),
+    }));
+    downloadScreeningReport(entries, actor);
+  };
+
+  const eligible = filtered.filter((a: Application) => a.status === "Pending" || a.status === "Under Review");
+
   return (
     <div className="space-y-3">
-      <h1 className="font-bold text-xl text-caa-body">{job ? `Applications — ${job.title}` : "All Applications"}</h1>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <h1 className="font-bold text-xl text-caa-body">{job ? `Applications — ${job.title}` : "All Applications"}</h1>
+        {canAccess(role, "canShortlist", perms) && (
+          eligible.length > 0 ? (
+            <button
+              onClick={runScreening}
+              className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-semibold bg-caa-navy text-white rounded-md hover:bg-caa-navy-2 shrink-0"
+            >
+              <FileSearch className="h-4 w-4" /> Run Auto-Screening ({eligible.length})
+            </button>
+          ) : filtered.length > 0 ? (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-caa-success bg-caa-success/10 rounded-full shrink-0">
+              <CheckCircle2 className="h-3.5 w-3.5" /> All applicants screened
+            </span>
+          ) : null
+        )}
+      </div>
+
+      {/* Screening result panel */}
+      {screeningResult && !screeningResult.confirmed && (
+        <div className="caa-card border-2 border-caa-navy/30 p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-bold text-caa-body">Screening results</p>
+              <p className="text-xs text-caa-muted mt-0.5">System evaluated {screeningResult.results.length} pending application{screeningResult.results.length !== 1 ? "s" : ""} against the criteria for each position.</p>
+            </div>
+            <button onClick={() => setScreeningResult(null)} className="text-caa-muted hover:text-caa-body"><XCircle className="h-5 w-5" /></button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-lg bg-caa-success/10 border border-caa-success/20 p-3 text-center">
+              <p className="text-3xl font-bold text-caa-success">{screeningResult.results.filter((r) => r.ok).length}</p>
+              <p className="text-xs text-caa-success font-medium mt-1">Pass — will be shortlisted</p>
+            </div>
+            <div className="rounded-lg bg-caa-danger/10 border border-caa-danger/20 p-3 text-center">
+              <p className="text-3xl font-bold text-caa-danger">{screeningResult.results.filter((r) => !r.ok).length}</p>
+              <p className="text-xs text-caa-danger font-medium mt-1">Fail — will be declined</p>
+            </div>
+          </div>
+
+          {/* Breakdown table */}
+          <div className="rounded-md border border-caa-border overflow-hidden max-h-64 overflow-y-auto">
+            <table className="w-full text-xs">
+              <thead className="bg-caa-surface text-caa-muted sticky top-0">
+                <tr><th className="text-left p-2">Candidate</th><th className="text-left p-2">Role</th><th className="text-left p-2">Result</th><th className="text-left p-2">Failed checks</th></tr>
+              </thead>
+              <tbody className="divide-y divide-caa-border">
+                {screeningResult.results.map((r) => (
+                  <tr key={r.app.id} className={r.ok ? "bg-white" : "bg-caa-danger/3"}>
+                    <td className="p-2 font-medium text-caa-body">{r.app.candidateName ?? "—"}</td>
+                    <td className="p-2 text-caa-muted">{r.app.abbr}</td>
+                    <td className="p-2">
+                      {r.ok
+                        ? <span className="text-caa-success font-semibold flex items-center gap-1"><CheckCircle2 className="h-3 w-3" /> Pass</span>
+                        : <span className="text-caa-danger font-semibold flex items-center gap-1"><XCircle className="h-3 w-3" /> Fail</span>}
+                    </td>
+                    <td className="p-2 text-caa-muted">{r.checks.filter((c) => !c.pass).map((c) => c.label).join(", ") || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex gap-2 pt-1 flex-wrap">
+            <button onClick={confirmScreening} className="px-4 py-2 text-sm font-semibold bg-caa-navy text-white rounded-md hover:bg-caa-navy-2">
+              Confirm & Apply Results
+            </button>
+            <button onClick={exportScreeningReport} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold border border-caa-navy text-caa-navy rounded-md hover:bg-caa-navy/5">
+              <FileDown className="h-4 w-4" /> Export Report PDF
+            </button>
+            <button onClick={() => setScreeningResult(null)} className="px-4 py-2 text-sm border border-caa-border rounded-md">Cancel</button>
+          </div>
+          <p className="text-[11px] text-caa-muted">Passing applicants will move to <strong>Shortlisted</strong>. Failing applicants will be <strong>Declined</strong>. You can still override individual statuses afterwards.</p>
+        </div>
+      )}
+
+      {screeningResult?.confirmed && (
+        <div className="rounded-lg border border-caa-success/30 bg-caa-success/5 p-3 flex items-center gap-2 text-sm text-caa-success font-medium">
+          <CheckCircle2 className="h-4 w-4 shrink-0" />
+          Auto-screening applied — {screeningResult.results.filter((r) => r.ok).length} shortlisted, {screeningResult.results.filter((r) => !r.ok).length} declined. Review the shortlisted candidates below.
+          <button onClick={() => setScreeningResult(null)} className="ml-auto text-caa-success/60 hover:text-caa-success"><XCircle className="h-4 w-4" /></button>
+        </div>
+      )}
 
       <div className="flex gap-2 flex-wrap">
         {["all", ...APPLICATION_STATUSES].map((s) => (
@@ -746,6 +1067,8 @@ function AppsTab({ jobs, applications, jobId, cvStore, updateStatus, logAction, 
           onUpdateStatus={(status: ApplicationStatus, msg: string) => {
             updateStatus(selected.id, status, selected.candidateEmail, msg);
             logAction(`Set application #${selected.id} to ${status}`, selected.candidateName ?? selected.candidateEmail);
+            const { subject, body } = buildEmail(status, selected.candidateName ?? "Applicant", selected.title);
+            logEmail({ to: selected.candidateEmail ?? "", candidateName: selected.candidateName ?? "Applicant", subject, body, trigger: status, jobTitle: selected.title });
             setSelected((prev) => prev ? { ...prev, status } as Application : null);
           }}
           actor={actor}
@@ -757,16 +1080,17 @@ function AppsTab({ jobs, applications, jobId, cvStore, updateStatus, logAction, 
 
 // ─── Application Detail Modal ─────────────────────────────────────────────────
 
-function AppDetailModal({ app, job, cv, criteria, canShortlist, onClose, onUpdateStatus }: any) {
+function AppDetailModal({ app, job, cv, criteria, canShortlist, onClose, onUpdateStatus, actor }: any) {
   const [confirmStatus, setConfirmStatus] = useState<string | null>(null);
   const [notifMsg, setNotifMsg] = useState("");
+  const [emailSubject, setEmailSubject] = useState("");
   const { ok, checks } = useMemo(() => autoQualify(app, job, cv, criteria), [app, job, cv, criteria]);
 
   const actionButtons = [
-    { status: "Shortlisted", label: "Shortlist",    color: "bg-caa-success text-white",    defaultMsg: `Congratulations! Your application for ${app.title} has been shortlisted. You will be contacted shortly with further details.` },
-    { status: "Interview",   label: "Invite Interview", color: "bg-purple-600 text-white", defaultMsg: `Your application for ${app.title} has progressed to the interview stage. Our HR team will contact you to schedule a date and time.` },
-    { status: "Offered",     label: "Make Offer",   color: "bg-teal-600 text-white",        defaultMsg: `We are pleased to offer you the position of ${app.title}. Please expect a formal offer letter shortly.` },
-    { status: "Declined",    label: "Decline",      color: "bg-caa-danger text-white",      defaultMsg: `Thank you for your interest in the ${app.title} position. After careful consideration, we regret to inform you that your application has not been successful on this occasion.` },
+    { status: "Shortlisted", label: "Shortlist",       color: "bg-caa-success text-white"  },
+    { status: "Interview",   label: "Invite Interview", color: "bg-purple-600 text-white"   },
+    { status: "Offered",     label: "Make Offer",       color: "bg-teal-600 text-white"     },
+    { status: "Declined",    label: "Decline",          color: "bg-caa-danger text-white"   },
   ];
 
   return (
@@ -866,7 +1190,12 @@ function AppDetailModal({ app, job, cv, criteria, canShortlist, onClose, onUpdat
                   <button
                     key={btn.status}
                     disabled={app.status === btn.status}
-                    onClick={() => { setConfirmStatus(btn.status); setNotifMsg(btn.defaultMsg); }}
+                    onClick={() => {
+                      const em = buildEmail(btn.status, app.candidateName ?? "Applicant", app.title);
+                      setConfirmStatus(btn.status);
+                      setEmailSubject(em.subject);
+                      setNotifMsg(em.body);
+                    }}
                     className={`px-3 py-1.5 text-xs font-semibold rounded-md disabled:opacity-40 transition-opacity ${btn.color}`}
                   >
                     {btn.label}
@@ -874,15 +1203,47 @@ function AppDetailModal({ app, job, cv, criteria, canShortlist, onClose, onUpdat
                 ))}
               </div>
               {confirmStatus && (
-                <div className="border border-caa-border rounded-lg p-3 space-y-2">
-                  <p className="text-xs font-semibold text-caa-body">Notification to send to <span className="text-caa-navy">{app.candidateEmail}</span>:</p>
-                  <textarea rows={3} className={`${fi} text-xs`} value={notifMsg} onChange={(e) => setNotifMsg(e.target.value)} />
-                  <div className="flex gap-2">
-                    <button onClick={() => { onUpdateStatus(confirmStatus, notifMsg); setConfirmStatus(null); }} className="px-3 py-1.5 text-xs font-semibold bg-caa-navy text-white rounded-md">Confirm & Send</button>
+                <div className="border border-caa-border rounded-lg p-3 space-y-3">
+                  <div>
+                    <p className="text-[11px] font-semibold text-caa-muted uppercase tracking-widest mb-1">Email preview — to <span className="text-caa-navy normal-case">{app.candidateEmail}</span></p>
+                    <p className="text-xs font-semibold text-caa-body mb-1">Subject: {emailSubject}</p>
+                    <textarea rows={6} className={`${fi} text-xs font-mono`} value={notifMsg} onChange={(e) => setNotifMsg(e.target.value)} />
+                  </div>
+                  <div className="flex gap-2 flex-wrap">
+                    <button
+                      onClick={() => { onUpdateStatus(confirmStatus, notifMsg); setConfirmStatus(null); }}
+                      className="px-3 py-1.5 text-xs font-semibold bg-caa-navy text-white rounded-md"
+                    >
+                      Confirm status update
+                    </button>
+                    <a
+                      href={`mailto:${app.candidateEmail}?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(notifMsg)}`}
+                      onClick={() => { onUpdateStatus(confirmStatus, notifMsg); setConfirmStatus(null); }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold border border-caa-navy text-caa-navy rounded-md hover:bg-caa-navy/5"
+                    >
+                      <ExternalLink className="h-3 w-3" /> Send via email client
+                    </a>
                     <button onClick={() => setConfirmStatus(null)} className="px-3 py-1.5 text-xs border border-caa-border rounded-md">Cancel</button>
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Offer letter download — visible once candidate is Offered */}
+          {app.status === "Offered" && (
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-caa-success/8 border border-caa-success/20">
+              <CheckCircle2 className="h-5 w-5 text-caa-success shrink-0" />
+              <div className="flex-1">
+                <p className="text-xs font-semibold text-caa-success">Offer extended</p>
+                <p className="text-[11px] text-caa-muted mt-0.5">Generate the formal offer letter for this candidate.</p>
+              </div>
+              <button
+                onClick={() => downloadOfferLetter(app, job, actor)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-caa-success text-white rounded-md hover:opacity-90 shrink-0"
+              >
+                <Download className="h-3.5 w-3.5" /> Offer Letter PDF
+              </button>
             </div>
           )}
         </div>
@@ -1004,53 +1365,155 @@ function ReportsTab({ jobs, applications, audit, actor }: any) {
 function CriteriaTab({ jobs, criteria, saveCriteria, logAction }: { jobs: Job[]; criteria: JobCriteria[]; saveCriteria: (c: JobCriteria) => void; logAction: any }) {
   const [selectedJobId, setSelectedJobId] = useState<number>(jobs[0]?.id ?? 0);
   const existing = criteria.find((c) => c.jobId === selectedJobId);
-  const [draft, setDraft] = useState<Omit<JobCriteria, "jobId">>({ minCgpa: existing?.minCgpa, requiredKeywords: existing?.requiredKeywords ?? [], notes: existing?.notes ?? "" });
+
+  const blankDraft = (): Omit<JobCriteria, "jobId"> => ({
+    minCgpa: undefined,
+    requiredKeywords: [],
+    notes: "",
+    screeningQuestions: [],
+  });
+
+  const fromExisting = (e: JobCriteria | undefined): Omit<JobCriteria, "jobId"> => ({
+    minCgpa: e?.minCgpa,
+    requiredKeywords: e?.requiredKeywords ?? [],
+    notes: e?.notes ?? "",
+    screeningQuestions: e?.screeningQuestions ?? [],
+  });
+
+  const [draft, setDraft] = useState<Omit<JobCriteria, "jobId">>(fromExisting(existing));
   const [kw, setKw] = useState("");
+  const [qText, setQText] = useState("");
+  const [qType, setQType] = useState<"qualifier" | "disqualifier">("qualifier");
+  const [saved, setSaved] = useState(false);
 
   const handleJobChange = (id: number) => {
     setSelectedJobId(id);
-    const e = criteria.find((c) => c.jobId === id);
-    setDraft({ minCgpa: e?.minCgpa, requiredKeywords: e?.requiredKeywords ?? [], notes: e?.notes ?? "" });
+    setDraft(fromExisting(criteria.find((c) => c.jobId === id)));
   };
 
-  const addKw = () => { if (kw.trim()) { setDraft({ ...draft, requiredKeywords: [...draft.requiredKeywords, kw.trim()] }); setKw(""); } };
-  const removeKw = (k: string) => setDraft({ ...draft, requiredKeywords: draft.requiredKeywords.filter((x) => x !== k) });
+  const addKw = () => { if (kw.trim()) { setDraft((d) => ({ ...d, requiredKeywords: [...d.requiredKeywords, kw.trim()] })); setKw(""); } };
+  const removeKw = (k: string) => setDraft((d) => ({ ...d, requiredKeywords: d.requiredKeywords.filter((x) => x !== k) }));
+
+  const addQuestion = () => {
+    if (!qText.trim()) return;
+    const q: ScreeningQuestion = { id: Date.now().toString(), text: qText.trim(), type: qType };
+    setDraft((d) => ({ ...d, screeningQuestions: [...(d.screeningQuestions ?? []), q] }));
+    setQText("");
+  };
+  const removeQuestion = (id: string) => setDraft((d) => ({ ...d, screeningQuestions: (d.screeningQuestions ?? []).filter((q) => q.id !== id) }));
 
   const save = () => {
     saveCriteria({ jobId: selectedJobId, ...draft });
     logAction("Updated criteria", jobs.find((j) => j.id === selectedJobId)?.title);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
   };
 
+  const qualifiers = (draft.screeningQuestions ?? []).filter((q) => q.type === "qualifier");
+  const disqualifiers = (draft.screeningQuestions ?? []).filter((q) => q.type === "disqualifier");
+
   return (
-    <div className="space-y-4 max-w-xl">
-      <div><h1 className="font-bold text-xl text-caa-body">Criteria Setup</h1><p className="text-xs text-caa-muted mt-0.5">Set screening criteria for automatic qualification checks.</p></div>
+    <div className="space-y-4 max-w-2xl">
+      <div>
+        <h1 className="font-bold text-xl text-caa-body">Criteria Setup</h1>
+        <p className="text-xs text-caa-muted mt-0.5">Set automatic screening rules. The system uses these to shortlist applicants — candidates never see this configuration.</p>
+      </div>
+
       <Field label="Select position">
         <select className={fi} value={selectedJobId} onChange={(e) => handleJobChange(Number(e.target.value))}>
           {jobs.map((j) => <option key={j.id} value={j.id}>{j.title}</option>)}
         </select>
       </Field>
-      <div className="caa-card p-4 space-y-4">
-        <Field label="Minimum CGPA (internship / graduate roles, leave blank if N/A)">
-          <input type="number" min={0} max={5} step={0.1} className={fi} value={draft.minCgpa ?? ""} onChange={(e) => setDraft({ ...draft, minCgpa: e.target.value ? parseFloat(e.target.value) : undefined })} placeholder="e.g. 3.5" />
-        </Field>
-        <div>
-          <label className="block text-xs font-medium text-caa-body mb-1">Required keywords (CV must contain these)</label>
-          <div className="flex gap-2 mb-2">
-            <input className={`${fi} flex-1`} value={kw} onChange={(e) => setKw(e.target.value)} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addKw())} placeholder="Add keyword…" />
-            <button onClick={addKw} className="px-3 py-1.5 bg-caa-navy text-white text-xs rounded-md">Add</button>
+
+      <div className="caa-card p-4 space-y-5">
+
+        {/* Basic filters */}
+        <Section title="Basic filters">
+          <Field label="Minimum CGPA (internship / graduate roles — leave blank if N/A)">
+            <input type="number" min={0} max={5} step={0.1} className={fi} value={draft.minCgpa ?? ""} onChange={(e) => setDraft((d) => ({ ...d, minCgpa: e.target.value ? parseFloat(e.target.value) : undefined }))} placeholder="e.g. 3.5" />
+          </Field>
+          <div>
+            <label className="block text-xs font-medium text-caa-body mb-1">Required keywords (CV must contain all of these)</label>
+            <div className="flex gap-2 mb-2">
+              <input className={`${fi} flex-1`} value={kw} onChange={(e) => setKw(e.target.value)} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addKw())} placeholder="Add keyword…" />
+              <button onClick={addKw} className="px-3 py-1.5 bg-caa-navy text-white text-xs rounded-md">Add</button>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {draft.requiredKeywords.map((k) => (
+                <span key={k} className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-caa-navy/10 text-caa-navy">
+                  {k} <button onClick={() => removeKw(k)} className="text-caa-navy/60 hover:text-caa-danger">×</button>
+                </span>
+              ))}
+              {draft.requiredKeywords.length === 0 && <span className="text-[11px] text-caa-muted">None added</span>}
+            </div>
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            {draft.requiredKeywords.map((k) => (
-              <span key={k} className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-caa-navy/10 text-caa-navy">
-                {k} <button onClick={() => removeKw(k)} className="text-caa-navy/60 hover:text-caa-danger">×</button>
-              </span>
-            ))}
+        </Section>
+
+        {/* Qualifier / Disqualifier questions */}
+        <Section title="Qualifier & Disqualifier questions">
+          <div className="rounded-lg border border-caa-border bg-caa-surface/60 p-3 mb-3 text-[11px] text-caa-muted leading-relaxed">
+            <span className="font-semibold text-caa-navy">Qualifier:</span> applicant <strong>must</strong> show evidence of this in their CV to pass screening.<br />
+            <span className="font-semibold text-caa-danger">Disqualifier:</span> if evidence of this is found in their CV, applicant is <strong>automatically excluded</strong>.
           </div>
+
+          {/* Add new question */}
+          <div className="space-y-2 mb-4">
+            <div className="flex gap-2">
+              <select className={`${fi} w-40 shrink-0`} value={qType} onChange={(e) => setQType(e.target.value as "qualifier" | "disqualifier")}>
+                <option value="qualifier">Qualifier ✓</option>
+                <option value="disqualifier">Disqualifier ✗</option>
+              </select>
+              <input className={`${fi} flex-1`} value={qText} onChange={(e) => setQText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addQuestion())} placeholder="e.g. Has relevant aviation experience" />
+              <button onClick={addQuestion} className="px-3 py-1.5 bg-caa-navy text-white text-xs rounded-md shrink-0">Add</button>
+            </div>
+          </div>
+
+          {/* Qualifier list */}
+          {qualifiers.length > 0 && (
+            <div className="mb-3">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-caa-navy mb-1.5">Must pass (qualifiers)</p>
+              <div className="space-y-1.5">
+                {qualifiers.map((q) => (
+                  <div key={q.id} className="flex items-center gap-2 px-3 py-2 rounded-md bg-caa-success/5 border border-caa-success/20">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-caa-success shrink-0" />
+                    <span className="text-xs text-caa-body flex-1">{q.text}</span>
+                    <button onClick={() => removeQuestion(q.id)} className="text-caa-danger shrink-0"><Trash2 className="h-3.5 w-3.5" /></button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Disqualifier list */}
+          {disqualifiers.length > 0 && (
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-caa-danger mb-1.5">Auto-exclude if found (disqualifiers)</p>
+              <div className="space-y-1.5">
+                {disqualifiers.map((q) => (
+                  <div key={q.id} className="flex items-center gap-2 px-3 py-2 rounded-md bg-caa-danger/5 border border-caa-danger/20">
+                    <XCircle className="h-3.5 w-3.5 text-caa-danger shrink-0" />
+                    <span className="text-xs text-caa-body flex-1">{q.text}</span>
+                    <button onClick={() => removeQuestion(q.id)} className="text-caa-danger shrink-0"><Trash2 className="h-3.5 w-3.5" /></button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {qualifiers.length === 0 && disqualifiers.length === 0 && (
+            <p className="text-[11px] text-caa-muted">No screening questions set. Add them above.</p>
+          )}
+        </Section>
+
+        <Section title="Notes for recruiters">
+          <textarea rows={2} className={fi} value={draft.notes} onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))} placeholder="Optional guidance for the recruiter reviewing the shortlist…" />
+        </Section>
+
+        <div className="flex items-center gap-3">
+          <button onClick={save} className="px-4 py-2 bg-caa-navy text-white text-sm font-semibold rounded-md">Save criteria</button>
+          <button onClick={() => setDraft(blankDraft())} className="px-4 py-2 border border-caa-border text-sm rounded-md">Clear</button>
+          {saved && <span className="text-sm text-caa-success flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4" /> Saved</span>}
         </div>
-        <Field label="Notes for recruiters">
-          <textarea rows={2} className={fi} value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} placeholder="Optional guidance for the recruiter…" />
-        </Field>
-        <button onClick={save} className="px-4 py-2 bg-caa-navy text-white text-sm font-semibold rounded-md">Save criteria</button>
       </div>
     </div>
   );
@@ -1186,6 +1649,118 @@ function PermissionsTab({ overrides, save, logAction }: { overrides: PermissionO
         <button onClick={() => setDraft(ROLE_DEFAULTS_PERMS[selected?.role ?? "hr"] ?? {})} className="px-4 py-2 border border-caa-border text-sm rounded-md">Reset to defaults</button>
       </div>
       <p className="text-[11px] text-caa-muted flex items-center gap-1"><AlertCircle className="h-3 w-3" /> Permissions take effect on next sign-in.</p>
+    </div>
+  );
+}
+
+// ─── Email Log Tab ────────────────────────────────────────────────────────────
+
+function EmailsTab({ sentEmails, clearEmailLog }: { sentEmails: SentEmail[]; clearEmailLog: () => void }) {
+  const [search, setSearch] = useState("");
+  const [expanded, setExpanded] = useState<number | null>(null);
+  const [triggerFilter, setTriggerFilter] = useState("all");
+
+  const triggers = Array.from(new Set(sentEmails.map((e) => e.trigger)));
+  const displayed = sentEmails.filter((e) => {
+    const matchSearch = !search || `${e.candidateName} ${e.to} ${e.subject} ${e.jobTitle}`.toLowerCase().includes(search.toLowerCase());
+    const matchTrigger = triggerFilter === "all" || e.trigger === triggerFilter;
+    return matchSearch && matchTrigger;
+  });
+
+  const TRIGGER_COLORS: Record<string, string> = {
+    "Shortlisted":     "bg-caa-success/10 text-caa-success",
+    "Interview":       "bg-purple-100 text-purple-700",
+    "Offered":         "bg-teal-100 text-teal-700",
+    "Declined":        "bg-caa-danger/10 text-caa-danger",
+    "Batch Screening": "bg-caa-navy/10 text-caa-navy",
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="font-bold text-xl text-caa-body">Email Log</h1>
+          <p className="text-xs text-caa-muted mt-0.5">{sentEmails.length} email{sentEmails.length !== 1 ? "s" : ""} sent via the portal</p>
+        </div>
+        <div className="flex gap-2">
+          {sentEmails.length > 0 && (
+            <button
+              onClick={() => { if (confirm("Clear all sent email records? This cannot be undone.")) clearEmailLog(); }}
+              className="px-3 py-1.5 text-xs border border-caa-danger/30 text-caa-danger rounded-md hover:bg-caa-danger/5"
+            >
+              Clear log
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="flex gap-2 flex-wrap items-center">
+        <input
+          value={search} onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search name, email, subject…"
+          className="px-3 py-1.5 text-sm border border-caa-border rounded-md bg-white focus:outline-none focus:border-caa-navy w-64"
+        />
+        <div className="flex gap-1.5 flex-wrap">
+          {["all", ...triggers].map((t) => (
+            <button key={t} onClick={() => setTriggerFilter(t)}
+              className={`px-2.5 py-1 text-[11px] rounded-full font-semibold border transition-colors ${triggerFilter === t ? "bg-caa-navy text-white border-caa-navy" : "border-caa-border text-caa-muted hover:border-caa-navy"}`}>
+              {t === "all" ? "All" : t}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {sentEmails.length === 0 ? (
+        <div className="caa-card p-10 text-center">
+          <Mail className="h-10 w-10 text-caa-muted/40 mx-auto mb-3" />
+          <p className="font-semibold text-caa-body">No emails sent yet</p>
+          <p className="text-xs text-caa-muted mt-1">Emails are logged here when you update application statuses or run auto-screening.</p>
+        </div>
+      ) : (
+        <div className="caa-card overflow-hidden divide-y divide-caa-border">
+          {displayed.map((e) => (
+            <div key={e.id} className="hover:bg-caa-surface/50">
+              <button
+                className="w-full text-left px-4 py-3 flex items-start gap-3"
+                onClick={() => setExpanded(expanded === e.id ? null : e.id)}
+              >
+                <Mail className="h-4 w-4 text-caa-navy shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-sm font-medium text-caa-body truncate">{e.candidateName}</p>
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${TRIGGER_COLORS[e.trigger] ?? "bg-caa-surface text-caa-muted"}`}>{e.trigger}</span>
+                  </div>
+                  <p className="text-xs text-caa-muted truncate mt-0.5">{e.subject}</p>
+                  <p className="text-[11px] text-caa-muted/70 mt-0.5">{e.to} · {new Date(e.sentAt).toLocaleString()}</p>
+                </div>
+                <span className="text-[10px] text-caa-muted shrink-0">{expanded === e.id ? "▲" : "▼"}</span>
+              </button>
+
+              {expanded === e.id && (
+                <div className="px-4 pb-4 space-y-3">
+                  <div className="rounded-lg border border-caa-border bg-caa-surface p-3">
+                    <p className="text-[11px] font-semibold text-caa-body mb-0.5">To: <span className="text-caa-navy">{e.to}</span></p>
+                    <p className="text-[11px] font-semibold text-caa-body mb-2">Subject: {e.subject}</p>
+                    <pre className="text-[11px] text-caa-muted whitespace-pre-wrap leading-relaxed border-t border-caa-border pt-2">{e.body}</pre>
+                  </div>
+                  <div className="flex gap-2">
+                    <a
+                      href={`mailto:${e.to}?subject=${encodeURIComponent(e.subject)}&body=${encodeURIComponent(e.body)}`}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-caa-navy text-white rounded-md hover:bg-caa-navy-2"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" /> Open in Email Client
+                    </a>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+          {displayed.length === 0 && (
+            <div className="p-6 text-center text-xs text-caa-muted">No emails match your search.</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { ChevronLeft, ChevronRight, Plus, Trash2, Check, AlertCircle, Pencil, Upload } from "lucide-react";
 import { useApp, EMPTY_CV, type CvProfile, type CvQualification, type QualLevel } from "@/context/AppContext";
 import { SuccessModal } from "@/components/SuccessModal";
-import { O_LEVEL_SUBJECTS, A_LEVEL_SUBJECTS, O_LEVEL_GRADES, A_LEVEL_GRADES, QUAL_LEVELS } from "@/lib/uganda-curriculum";
+import { O_LEVEL_SUBJECTS, A_LEVEL_SUBJECTS, O_LEVEL_GRADES, A_LEVEL_GRADES, QUAL_LEVELS, UGANDAN_UNIVERSITIES, COMMON_COURSES } from "@/lib/uganda-curriculum";
 import { extractPdfText } from "@/lib/pdf-extract";
 
 export const Route = createFileRoute("/apply")({
@@ -283,6 +283,36 @@ function ApplyPage() {
   );
 }
 
+/* ---------- Combobox: dropdown + manual "Other" fallback ---------- */
+function Combobox({ options, value, onChange, placeholder }: { options: string[]; value: string; onChange: (v: string) => void; placeholder?: string }) {
+  const isOther = value !== "" && !options.includes(value);
+  const [mode, setMode] = useState<"select" | "manual">(isOther ? "manual" : "select");
+  const [selectVal, setSelectVal] = useState(isOther ? "" : value);
+
+  const handleSelect = (v: string) => {
+    if (v === "__other__") { setMode("manual"); onChange(""); }
+    else { setSelectVal(v); onChange(v); }
+  };
+  const handleManual = (v: string) => onChange(v);
+  const backToSelect = () => { setMode("select"); setSelectVal(""); onChange(""); };
+
+  if (mode === "manual") {
+    return (
+      <div className="flex gap-1.5">
+        <input autoFocus className={input("flex-1")} value={value} onChange={(e) => handleManual(e.target.value)} placeholder="Type here…" />
+        <button type="button" onClick={backToSelect} className="shrink-0 px-2 py-1 text-[11px] border border-caa-border rounded-md text-caa-muted hover:text-caa-navy">↩ List</button>
+      </div>
+    );
+  }
+  return (
+    <select className={input()} value={selectVal} onChange={(e) => handleSelect(e.target.value)}>
+      <option value="">{placeholder ?? "Select…"}</option>
+      {options.map((o) => <option key={o} value={o}>{o}</option>)}
+      <option value="__other__">Other (type manually)…</option>
+    </select>
+  );
+}
+
 /* ---------- Qualifications ---------- */
 function QualificationsStep({ data, setData }: { data: CvProfile; setData: (d: CvProfile) => void }) {
   const add = (level: QualLevel) => {
@@ -318,7 +348,7 @@ function QualificationsStep({ data, setData }: { data: CvProfile; setData: (d: C
 
       {data.qualifications.map((q, i) => {
         const isSecondary = q.level === "O-Level" || q.level === "A-Level";
-        const subjects = q.level === "O-Level" ? O_LEVEL_SUBJECTS : A_LEVEL_SUBJECTS;
+        const subjectList = q.level === "O-Level" ? O_LEVEL_SUBJECTS : A_LEVEL_SUBJECTS;
         const grades = q.level === "O-Level" ? O_LEVEL_GRADES : A_LEVEL_GRADES;
         return (
           <div key={i} className="border border-caa-border rounded-md p-3 space-y-3 bg-caa-surface/40">
@@ -329,8 +359,14 @@ function QualificationsStep({ data, setData }: { data: CvProfile; setData: (d: C
 
             {!isSecondary && (
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                <div className="sm:col-span-2"><label className={label}>Course / programme</label><input className={input()} value={q.course} onChange={(e) => update(i, { course: e.target.value })} /></div>
-                <div className="sm:col-span-2"><label className={label}>Institution</label><input className={input()} value={q.institution} onChange={(e) => update(i, { institution: e.target.value })} /></div>
+                <div className="sm:col-span-2">
+                  <label className={label}>Course / programme</label>
+                  <Combobox options={COMMON_COURSES} value={q.course} onChange={(v) => update(i, { course: v })} placeholder="Select course…" />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className={label}>Institution / University</label>
+                  <Combobox options={UGANDAN_UNIVERSITIES} value={q.institution} onChange={(v) => update(i, { institution: v })} placeholder="Select university…" />
+                </div>
                 <div><label className={label}>Year of award</label><input className={input()} value={q.year} onChange={(e) => update(i, { year: e.target.value })} placeholder="YYYY" /></div>
                 <div className="sm:col-span-3 grid grid-cols-2 gap-2">
                   <FileField label="Proof of award" value={q.awardFile} onChange={(name) => update(i, { awardFile: name })} />
@@ -349,22 +385,28 @@ function QualificationsStep({ data, setData }: { data: CvProfile; setData: (d: C
                   <FileField label="Result slip" value={q.awardFile} onChange={(name) => update(i, { awardFile: name })} />
                 </div>
                 <div>
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between mb-1">
                     <label className={label}>Subjects & grades</label>
                     <button onClick={() => update(i, { subjects: [...(q.subjects ?? []), { subject: "", grade: "" }] })} className="text-[11px] text-caa-navy inline-flex items-center gap-1"><Plus className="h-3 w-3" /> Add subject</button>
                   </div>
                   <div className="space-y-1.5">
-                    {(q.subjects ?? []).map((s, si) => (
-                      <div key={si} className="grid grid-cols-[1fr_120px_auto] gap-2">
-                        <select className={input()} value={s.subject} onChange={(e) => update(i, { subjects: (q.subjects ?? []).map((x, xi) => xi === si ? { ...x, subject: e.target.value } : x) })}>
-                          <option value="">Subject…</option>{subjects.map((sub) => <option key={sub}>{sub}</option>)}
-                        </select>
-                        <select className={input()} value={s.grade} onChange={(e) => update(i, { subjects: (q.subjects ?? []).map((x, xi) => xi === si ? { ...x, grade: e.target.value } : x) })}>
-                          <option value="">Grade…</option>{grades.map((g) => <option key={g}>{g}</option>)}
-                        </select>
-                        <button onClick={() => update(i, { subjects: (q.subjects ?? []).filter((_, xi) => xi !== si) })} className="text-caa-danger px-1"><Trash2 className="h-3.5 w-3.5" /></button>
-                      </div>
-                    ))}
+                    {(q.subjects ?? []).map((s, si) => {
+                      const isOtherSubject = s.subject !== "" && !subjectList.includes(s.subject);
+                      return (
+                        <div key={si} className="grid grid-cols-[1fr_120px_auto] gap-2">
+                          <SubjectCombobox
+                            options={subjectList}
+                            value={s.subject}
+                            isOther={isOtherSubject}
+                            onChange={(v) => update(i, { subjects: (q.subjects ?? []).map((x, xi) => xi === si ? { ...x, subject: v } : x) })}
+                          />
+                          <select className={input()} value={s.grade} onChange={(e) => update(i, { subjects: (q.subjects ?? []).map((x, xi) => xi === si ? { ...x, grade: e.target.value } : x) })}>
+                            <option value="">Grade…</option>{grades.map((g) => <option key={g}>{g}</option>)}
+                          </select>
+                          <button onClick={() => update(i, { subjects: (q.subjects ?? []).filter((_, xi) => xi !== si) })} className="text-caa-danger px-1"><Trash2 className="h-3.5 w-3.5" /></button>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </>
@@ -373,6 +415,25 @@ function QualificationsStep({ data, setData }: { data: CvProfile; setData: (d: C
         );
       })}
     </div>
+  );
+}
+
+function SubjectCombobox({ options, value, isOther, onChange }: { options: string[]; value: string; isOther: boolean; onChange: (v: string) => void }) {
+  const [manual, setManual] = useState(isOther);
+  if (manual) {
+    return (
+      <div className="flex gap-1">
+        <input autoFocus className={input("flex-1")} value={value} onChange={(e) => onChange(e.target.value)} placeholder="Subject name…" />
+        <button type="button" onClick={() => { setManual(false); onChange(""); }} className="shrink-0 px-1.5 text-[10px] border border-caa-border rounded text-caa-muted hover:text-caa-navy">↩</button>
+      </div>
+    );
+  }
+  return (
+    <select className={input()} value={value} onChange={(e) => { if (e.target.value === "__other__") { setManual(true); onChange(""); } else onChange(e.target.value); }}>
+      <option value="">Subject…</option>
+      {options.map((s) => <option key={s} value={s}>{s}</option>)}
+      <option value="__other__">Other (type manually)…</option>
+    </select>
   );
 }
 

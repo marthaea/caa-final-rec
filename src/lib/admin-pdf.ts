@@ -464,6 +464,232 @@ export function downloadShortlistedDossiers(
   doc.save(`caa-shortlist-dossiers-${Date.now()}.pdf`);
 }
 
+export type ScreeningReportEntry = {
+  id: number; name: string; email: string; role: string; dept: string; date: string;
+  pass: boolean; failedChecks: string[];
+};
+
+export function downloadScreeningReport(
+  entries: ScreeningReportEntry[],
+  actor: string,
+) {
+  const doc = new jsPDF();
+  const now = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+  const passed = entries.filter((e) => e.pass);
+  const failed  = entries.filter((e) => !e.pass);
+  const pct = entries.length ? Math.round((passed.length / entries.length) * 100) : 0;
+
+  header(doc, "Automated Screening Report", `Screened ${entries.length} applicant${entries.length !== 1 ? "s" : ""} — ${now}`);
+
+  // ── Summary box ──────────────────────────────────────────────────────────
+  let y = 65;
+  doc.setFillColor(245, 247, 250);
+  doc.roundedRect(10, y, 190, 22, 2, 2, "F");
+  doc.setDrawColor(...NAVY); doc.setLineWidth(0.3);
+  doc.roundedRect(10, y, 190, 22, 2, 2, "S");
+
+  const cols = [
+    { label: "Total Screened", value: String(entries.length), x: 35 },
+    { label: "Passed (Shortlisted)", value: String(passed.length), x: 80 },
+    { label: "Failed (Declined)", value: String(failed.length), x: 125 },
+    { label: "Pass Rate", value: `${pct}%`, x: 170 },
+  ];
+  cols.forEach(({ label, value, x }) => {
+    doc.setFont("helvetica", "bold"); doc.setFontSize(14); doc.setTextColor(...NAVY);
+    doc.text(value, x, y + 12, { align: "center" });
+    doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.setTextColor(80, 80, 80);
+    doc.text(label, x, y + 19, { align: "center" });
+  });
+  y += 28;
+
+  // ── By-position summary ────────────────────────────────────────────────
+  const byRole: Record<string, { screened: number; pass: number }> = {};
+  entries.forEach((e) => {
+    if (!byRole[e.role]) byRole[e.role] = { screened: 0, pass: 0 };
+    byRole[e.role].screened++;
+    if (e.pass) byRole[e.role].pass++;
+  });
+  const roleRows = Object.entries(byRole).map(([role, { screened, pass: p }]) => [
+    role, screened, p, screened - p, `${Math.round((p / screened) * 100)}%`,
+  ]);
+
+  doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(...NAVY);
+  doc.text("RESULTS BY POSITION", 10, y); y += 2;
+  autoTable(doc, {
+    startY: y,
+    head: [["Position", "Screened", "Pass", "Fail", "Pass Rate"]],
+    body: roleRows,
+    headStyles: { fillColor: NAVY, textColor: 255, fontStyle: "bold" },
+    styles: { fontSize: 8.5, cellPadding: 2.5 },
+    columnStyles: { 0: { cellWidth: 85 }, 4: { fontStyle: "bold" } },
+    alternateRowStyles: { fillColor: [245, 247, 250] },
+  });
+  y = (doc as any).lastAutoTable.finalY + 8;
+
+  // ── Passed candidates ──────────────────────────────────────────────────
+  if (passed.length > 0) {
+    doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(16, 111, 74);
+    doc.text(`SHORTLISTED — ${passed.length} CANDIDATE${passed.length !== 1 ? "S" : ""}`, 10, y); y += 2;
+    autoTable(doc, {
+      startY: y,
+      head: [["#", "Candidate", "Email", "Position", "Department", "Applied"]],
+      body: passed.map((e, i) => [i + 1, e.name, e.email, e.role, e.dept, e.date]),
+      headStyles: { fillColor: [16, 111, 74], textColor: 255, fontStyle: "bold" },
+      styles: { fontSize: 7.5, cellPadding: 2 },
+      alternateRowStyles: { fillColor: [240, 253, 244] },
+    });
+    y = (doc as any).lastAutoTable.finalY + 8;
+  }
+
+  // ── Failed candidates ─────────────────────────────────────────────────
+  if (failed.length > 0) {
+    if (y > 220) { doc.addPage(); y = 20; }
+    doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(220, 38, 38);
+    doc.text(`NOT MEETING CRITERIA — ${failed.length} CANDIDATE${failed.length !== 1 ? "S" : ""}`, 10, y); y += 2;
+    autoTable(doc, {
+      startY: y,
+      head: [["#", "Candidate", "Position", "Applied", "Failed Checks"]],
+      body: failed.map((e, i) => [i + 1, e.name, e.role, e.date, e.failedChecks.join(", ") || "—"]),
+      headStyles: { fillColor: [220, 38, 38], textColor: 255, fontStyle: "bold" },
+      styles: { fontSize: 7.5, cellPadding: 2 },
+      alternateRowStyles: { fillColor: [254, 242, 242] },
+    });
+  }
+
+  // ── Disclaimer ────────────────────────────────────────────────────────
+  const lastPage = doc.getNumberOfPages();
+  doc.setPage(lastPage);
+  const ly = (doc as any).lastAutoTable?.finalY ?? 240;
+  if (ly + 18 < 280) {
+    doc.setFont("helvetica", "italic"); doc.setFontSize(7.5); doc.setTextColor(120, 120, 120);
+    doc.text(
+      "This report was generated automatically by the UCAA e-Recruitment Portal. Results are based on application data and CV information on file. " +
+      "Administrators should review borderline cases before final confirmation. This document is strictly confidential.",
+      10, ly + 8, { maxWidth: 190 },
+    );
+  }
+
+  footer(doc, actor);
+  doc.save(`caa-screening-report-${Date.now()}.pdf`);
+}
+
+export function downloadOfferLetter(app: Application, job: Job | undefined, actor: string) {
+  const doc = new jsPDF();
+  const ref = `UCAA/HR/${new Date().getFullYear()}/${String(app.id).padStart(4, "0")}`;
+  const today = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+  const reportingDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+    .toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+  const firstName = (app.candidateName ?? "Applicant").split(" ")[0];
+
+  header(doc, "LETTER OF OFFER — EMPLOYMENT");
+
+  let y = 68;
+
+  // Candidate address block
+  doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(30, 30, 30);
+  doc.text(app.candidateName ?? "Applicant", 10, y);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(80, 80, 80);
+  doc.text("Uganda", 10, y + 5);
+  if (app.candidateEmail) doc.text(app.candidateEmail, 10, y + 10);
+  doc.text(today, 200, y + 10, { align: "right" });
+  y += 22;
+
+  doc.setFontSize(8.5);
+  doc.text(`Ref: ${ref}`, 10, y);
+  y += 9;
+
+  // Salutation
+  doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(30, 30, 30);
+  doc.text(`Dear ${firstName},`, 10, y);
+  y += 8;
+
+  // Heading
+  doc.setFont("helvetica", "bold"); doc.setFontSize(11); doc.setTextColor(...NAVY);
+  const heading = `OFFER OF EMPLOYMENT — ${app.title.toUpperCase()}`;
+  doc.text(heading, 10, y);
+  doc.setDrawColor(...NAVY); doc.setLineWidth(0.3);
+  doc.line(10, y + 2, Math.min(10 + doc.getTextWidth(heading), 200), y + 2);
+  y += 10;
+
+  // Opening paragraph
+  doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(30, 30, 30);
+  const wrap = (text: string, startY: number): number => {
+    const lines = doc.splitTextToSize(text, 190);
+    doc.text(lines, 10, startY);
+    return startY + lines.length * 5.5;
+  };
+  y = wrap(
+    `Following your successful performance throughout the Uganda Civil Aviation Authority (UCAA) selection process for the above-named position, we are pleased to extend to you this offer of employment, subject to the terms and conditions set out below.`,
+    y,
+  );
+  y += 6;
+
+  // Terms table
+  autoTable(doc, {
+    startY: y,
+    body: [
+      ["Position:",            app.title],
+      ["Department:",          job?.dept ?? app.dept],
+      ["Grade / Salary Band:", job?.salaryBand ?? "As per HR schedule"],
+      ["Monthly Gross Salary:", job?.salary ?? "As per HR schedule"],
+      ["Employment Type:",     job?.type ?? "Full-time, Permanent"],
+      ["Place of Work:",       job?.location ?? "Entebbe International Airport, Kampala"],
+      ["Reporting Date:",      reportingDate],
+    ],
+    styles: { fontSize: 9.5, cellPadding: 3, lineColor: [220, 225, 235], lineWidth: 0.2 },
+    columnStyles: { 0: { fontStyle: "bold", cellWidth: 58, textColor: NAVY }, 1: { textColor: [30, 30, 30] } },
+    tableLineWidth: 0.2, tableLineColor: [220, 225, 235],
+  });
+  y = (doc as any).lastAutoTable.finalY + 8;
+
+  y = wrap(
+    `This offer is conditional upon: (a) satisfactory completion of a pre-employment medical examination at an institution approved by UCAA; (b) verification and authentication of all academic and professional credentials submitted; (c) satisfactory reference and background checks; and (d) signing of the UCAA Employment Contract within five (5) working days of receipt of this letter.`,
+    y,
+  );
+  y += 6;
+
+  y = wrap(
+    `You are required to report to the Human Resources Department at UCAA Head Office, Entebbe International Airport, on the reporting date stated above. Please carry originals and photocopies of: all academic certificates and transcripts; your National Identity Card (NIN); two recent passport-size photographs; and any other supporting documents submitted with your application.`,
+    y,
+  );
+  y += 8;
+
+  doc.text("We look forward to welcoming you to the UCAA family. Congratulations.", 10, y);
+  y += 10;
+
+  // Signature block
+  doc.text("Yours sincerely,", 10, y);
+  y += 14;
+  doc.setDrawColor(180, 180, 180); doc.setLineWidth(0.3);
+  doc.line(10, y, 80, y);
+  y += 5;
+  doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(30, 30, 30);
+  doc.text(actor, 10, y);
+  y += 5;
+  doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(80, 80, 80);
+  doc.text("For: Director Human Resources", 10, y);
+  y += 4; doc.text("Uganda Civil Aviation Authority", 10, y);
+  y += 12;
+
+  // Acceptance tear-off
+  if (y + 32 > 275) { doc.addPage(); y = 20; }
+  doc.setDrawColor(...NAVY); doc.setLineWidth(0.4);
+  doc.roundedRect(10, y, 190, 32, 2, 2, "S");
+  doc.setFillColor(247, 249, 252);
+  doc.rect(10, y, 190, 8, "F");
+  doc.setFont("helvetica", "bold"); doc.setFontSize(9); doc.setTextColor(...NAVY);
+  doc.text("ACCEPTANCE — To be signed and returned to HR within 5 working days", 14, y + 5.5);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(9); doc.setTextColor(40, 40, 40);
+  doc.text(
+    `I, ${app.candidateName ?? "________________________________________"}, accept this offer of employment on the terms stated above.`,
+    14, y + 15,
+  );
+  doc.text("Signature: ___________________________    Date: ___________________________", 14, y + 25);
+
+  footer(doc, actor);
+  doc.save(`offer-letter-${(app.candidateName ?? "applicant").replace(/\s+/g, "-").toLowerCase()}-${Date.now()}.pdf`);
+}
+
 export function downloadJobAdvert(job: Job, actor: string) {
   const doc = new jsPDF();
   header(doc, "Job Advertisement", job.dept);
