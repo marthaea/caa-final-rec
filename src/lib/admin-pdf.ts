@@ -125,11 +125,11 @@ export function downloadDepartmentSummary(jobs: Job[], apps: Application[], acto
   const rows = depts.map((d) => {
     const dJobs = jobs.filter((j) => j.dept === d);
     const dApps = apps.filter((a) => dJobs.some((j) => j.id === a.jobId));
-    return [d, dJobs.length, dApps.length, dApps.filter((a) => a.status === "Shortlisted").length, dApps.filter((a) => a.status === "Hired").length];
+    return [d, dJobs.length, dApps.length, dApps.filter((a) => a.status === "Shortlisted").length, dApps.filter((a) => a.status === "Offered").length];
   });
   autoTable(doc, {
     startY: 65,
-    head: [["Department", "Listings", "Applications", "Shortlisted", "Hired"]],
+    head: [["Department", "Listings", "Applications", "Shortlisted", "Offered"]],
     body: rows,
     headStyles: { fillColor: NAVY, textColor: 255, fontStyle: "bold" },
     styles: { fontSize: 9, cellPadding: 3 },

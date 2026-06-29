@@ -13,7 +13,6 @@ import {
 } from "lucide-react";
 import {
   useApp, CAA_STAFF, HR_USERS, canAccess,
-  APPLICATION_STATUSES,
   type Job, type Visibility, type QualLevel, type AuditEntry, type AdminSettings,
   type Application, type ApplicationStatus, type JobCriteria, type ScreeningQuestion,
   type PermissionOverride, type AdminRole, type SentEmail,
@@ -55,7 +54,7 @@ const STAFF_DATA: StaffRecord[] = Object.entries(CAA_STAFF).map(([empNo, { first
 
 const STATUS_COLORS: Record<string, string> = {
   Pending: "#f59e0b", "Under Review": "#3b82f6", Shortlisted: "#10b981",
-  Interview: "#8b5cf6", Offered: "#0d9488", Hired: "#059669", Declined: "#ef4444",
+  Interview: "#8b5cf6", Offered: "#0d9488", Declined: "#ef4444",
 };
 
 
@@ -398,7 +397,7 @@ function DashboardTab({ jobs, applications, isExpired, navigate }: any) {
             <PieChart>
               <Pie data={statusData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={75} label={({ name, value }) => `${name}: ${value}`} labelLine={false}>
                 {statusData.map((_: any, i: number) => (
-                  <Cell key={i} fill={Object.values(STATUS_COLORS)[i % 7]} />
+                  <Cell key={i} fill={Object.values(STATUS_COLORS)[i % 6]} />
                 ))}
               </Pie>
               <Tooltip />
@@ -885,6 +884,17 @@ function AppsTab({ jobs, applications, jobId, cvStore, updateStatus, logAction, 
 
   const displayed = statusFilter === "all" ? filtered : filtered.filter((a: Application) => a.status === statusFilter);
 
+  const approveAllForInterview = () => {
+    const shortlisted = filtered.filter((a: Application) => a.status === "Shortlisted");
+    shortlisted.forEach((a: Application) => {
+      updateStatus(a.id, "Interview", a.candidateEmail, undefined);
+      const { subject, body } = buildEmail("Interview", a.candidateName ?? "Applicant", a.title);
+      logEmail({ to: a.candidateEmail ?? "", candidateName: a.candidateName ?? "Applicant", subject, body, trigger: "Interview Approval", jobTitle: a.title });
+    });
+    logAction(`Approved ${shortlisted.length} shortlisted candidates for interview`);
+    setStatusFilter("Interview");
+  };
+
   const runScreening = () => {
     const eligible = filtered.filter((a: Application) => a.status === "Pending" || a.status === "Under Review");
     const results: ScreeningResult[] = eligible.map((a: Application) => {
@@ -1011,20 +1021,94 @@ function AppsTab({ jobs, applications, jobId, cvStore, updateStatus, logAction, 
       )}
 
       {screeningResult?.confirmed && (
-        <div className="rounded-lg border border-caa-success/30 bg-caa-success/5 p-3 flex items-center gap-2 text-sm text-caa-success font-medium">
-          <CheckCircle2 className="h-4 w-4 shrink-0" />
-          Auto-screening applied — {screeningResult.results.filter((r) => r.ok).length} shortlisted, {screeningResult.results.filter((r) => !r.ok).length} declined. Review the shortlisted candidates below.
-          <button onClick={() => setScreeningResult(null)} className="ml-auto text-caa-success/60 hover:text-caa-success"><XCircle className="h-4 w-4" /></button>
+        <div className="rounded-lg border border-caa-success/30 bg-caa-success/5 p-3 flex items-start gap-2">
+          <CheckCircle2 className="h-4 w-4 text-caa-success shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-caa-success">Screening applied — {screeningResult.results.filter((r) => r.ok).length} shortlisted, {screeningResult.results.filter((r) => !r.ok).length} declined.</p>
+            <p className="text-xs text-caa-success/80 mt-0.5">Next step: review the shortlist below or export the PDF, then use <strong>Approve All for Interview</strong> to advance candidates to the interview stage.</p>
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <button onClick={() => { setStatusFilter("Shortlisted"); setScreeningResult(null); }} className="px-3 py-1 text-xs font-semibold bg-caa-success text-white rounded-md">View Shortlist</button>
+            <button onClick={() => setScreeningResult(null)} className="text-caa-success/60 hover:text-caa-success"><XCircle className="h-4 w-4" /></button>
+          </div>
         </div>
       )}
 
-      <div className="flex gap-2 flex-wrap">
-        {["all", ...APPLICATION_STATUSES].map((s) => (
-          <button key={s} onClick={() => setStatusFilter(s)} className={`px-3 py-1 text-[11px] rounded-full font-semibold transition-colors border ${statusFilter === s ? "bg-caa-navy text-white border-caa-navy" : "border-caa-border text-caa-muted hover:border-caa-navy"}`}>
-            {s === "all" ? "All" : s}
+      {/* Pending-after-screening notice */}
+      {filtered.some((a: Application) => a.status === "Pending" || a.status === "Under Review") &&
+       filtered.some((a: Application) => a.status === "Shortlisted" || a.status === "Interview") && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 flex items-center gap-2">
+          <AlertCircle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
+          <p className="text-[11px] text-amber-700">
+            <strong>{filtered.filter((a: Application) => a.status === "Pending" || a.status === "Under Review").length} application{filtered.filter((a: Application) => a.status === "Pending" || a.status === "Under Review").length !== 1 ? "s" : ""}</strong> are pending — received after the last screening batch or not yet processed. Run supplementary screening to include them.
+          </p>
+        </div>
+      )}
+
+      {/* Pipeline status bar */}
+      {(() => {
+        const stages = [
+          { status: "Pending",      label: "Pending",      tip: "Awaiting screening" },
+          { status: "Under Review", label: "Under Review", tip: "Manually flagged for review" },
+          { status: "Shortlisted",  label: "Shortlisted",  tip: "Passed screening — awaiting HR approval" },
+          { status: "Interview",    label: "Interview",    tip: "Approved for oral interview" },
+          { status: "Offered",      label: "Offered",      tip: "Position offered" },
+        ];
+        const declinedCount = filtered.filter((a: Application) => a.status === "Declined").length;
+        return (
+          <div className="caa-card p-3">
+            <div className="flex items-center gap-1 flex-wrap">
+              <button
+                onClick={() => setStatusFilter("all")}
+                className={`px-2.5 py-1 text-[11px] rounded-md font-semibold border transition-colors ${statusFilter === "all" ? "bg-caa-navy text-white border-caa-navy" : "border-caa-border text-caa-muted hover:border-caa-navy"}`}
+              >
+                All ({filtered.length})
+              </button>
+              <ChevronRight className="h-3 w-3 text-caa-border shrink-0" />
+              {stages.map((st, i) => {
+                const count = filtered.filter((a: Application) => a.status === st.status).length;
+                const active = statusFilter === st.status;
+                return (
+                  <div key={st.status} className="flex items-center gap-1">
+                    <button
+                      onClick={() => setStatusFilter(st.status)}
+                      title={st.tip}
+                      className={`px-2.5 py-1 text-[11px] rounded-md font-semibold border transition-colors ${active ? "text-white border-transparent" : "border-caa-border text-caa-muted hover:border-caa-navy"}`}
+                      style={active ? { backgroundColor: STATUS_COLORS[st.status], borderColor: STATUS_COLORS[st.status] } : {}}
+                    >
+                      {st.label} <span className={`ml-0.5 ${active ? "opacity-80" : ""}`}>({count})</span>
+                    </button>
+                    {i < stages.length - 1 && <ChevronRight className="h-3 w-3 text-caa-border shrink-0" />}
+                  </div>
+                );
+              })}
+              <button
+                onClick={() => setStatusFilter("Declined")}
+                className={`ml-auto px-2.5 py-1 text-[11px] rounded-md font-semibold border transition-colors ${statusFilter === "Declined" ? "bg-caa-danger text-white border-caa-danger" : "border-caa-border text-caa-danger/70 hover:border-caa-danger"}`}
+              >
+                Declined ({declinedCount})
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Approve for Interview banner */}
+      {statusFilter === "Shortlisted" && displayed.length > 0 && canAccess(role, "canShortlist", perms) && (
+        <div className="rounded-lg border border-purple-200 bg-purple-50 p-3 flex items-start gap-3">
+          <ClipboardList className="h-4 w-4 text-purple-700 shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-xs font-semibold text-purple-800">{displayed.length} shortlisted candidate{displayed.length !== 1 ? "s" : ""} awaiting HR review</p>
+            <p className="text-[11px] text-purple-600 mt-0.5">Review the list below or export the shortlist PDF. When satisfied, approve all candidates to proceed to oral interview.</p>
+          </div>
+          <button
+            onClick={approveAllForInterview}
+            className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-purple-700 text-white rounded-md hover:bg-purple-800"
+          >
+            <CheckCircle2 className="h-3.5 w-3.5" /> Approve All for Interview
           </button>
-        ))}
-      </div>
+        </div>
+      )}
 
       <div className="caa-card overflow-hidden">
         <table className="w-full text-sm">

@@ -4,8 +4,8 @@ import { createContext, useContext, useEffect, useState, useCallback, ReactNode 
 
 export type Visibility = "external" | "internal";
 export type QualLevel = "O-Level" | "A-Level" | "Certificate" | "Diploma" | "Degree" | "Masters" | "PhD";
-export type ApplicationStatus = "Pending" | "Under Review" | "Shortlisted" | "Interview" | "Offered" | "Hired" | "Declined";
-export const APPLICATION_STATUSES: ApplicationStatus[] = ["Pending", "Under Review", "Shortlisted", "Interview", "Offered", "Hired", "Declined"];
+export type ApplicationStatus = "Pending" | "Under Review" | "Shortlisted" | "Interview" | "Offered" | "Declined";
+export const APPLICATION_STATUSES: ApplicationStatus[] = ["Pending", "Under Review", "Shortlisted", "Interview", "Offered", "Declined"];
 export type AdminRole = "super" | "hr" | "recruiter";
 export type AuditEntry = { id: number; at: string; actor: string; role: string; action: string; target?: string };
 export type AdminSettings = { minAgeThreshold: number; allowExternalInternalJobs: boolean; orgName: string; sessionTimeoutMinutes: number };
@@ -258,14 +258,13 @@ function generateSeedApplications(): Application[] {
   const DOM = ["gmail.com","gmail.com","gmail.com","gmail.com","gmail.com","yahoo.com","outlook.com","hotmail.com","gmail.com","gmail.com"];
   const DATES = ["Jan 6, 2026","Jan 13, 2026","Jan 19, 2026","Jan 27, 2026","Feb 3, 2026","Feb 10, 2026","Feb 17, 2026","Feb 24, 2026","Mar 3, 2026","Mar 10, 2026","Mar 17, 2026","Mar 24, 2026","Apr 1, 2026","Apr 8, 2026","Apr 14, 2026","Apr 21, 2026","May 5, 2026","May 12, 2026","May 19, 2026","May 26, 2026","Jun 2, 2026","Jun 6, 2026","Jun 9, 2026","Jun 12, 2026","Jun 16, 2026","Jun 19, 2026","Jun 23, 2026"];
 
-  // Weighted status pool: 38 Pending, 24 Under Review, 16 Shortlisted, 9 Interview, 3 Offered, 2 Hired, 8 Declined = 100
+  // Weighted status pool: 38 Pending, 24 Under Review, 16 Shortlisted, 9 Interview, 5 Offered, 8 Declined = 100
   const ST: ApplicationStatus[] = [
     ...Array<ApplicationStatus>(38).fill("Pending"),
     ...Array<ApplicationStatus>(24).fill("Under Review"),
     ...Array<ApplicationStatus>(16).fill("Shortlisted"),
     ...Array<ApplicationStatus>(9).fill("Interview"),
-    ...Array<ApplicationStatus>(3).fill("Offered"),
-    ...Array<ApplicationStatus>(2).fill("Hired"),
+    ...Array<ApplicationStatus>(5).fill("Offered"),
     ...Array<ApplicationStatus>(8).fill("Declined"),
   ];
 

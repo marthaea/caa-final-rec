@@ -21,7 +21,6 @@ const STATUS: Record<Application["status"], string> = {
   Declined:       "bg-caa-danger/10 text-caa-danger",
   Interview:      "bg-purple-100 text-purple-700",
   Offered:        "bg-teal-100 text-teal-700",
-  Hired:          "bg-caa-success/15 text-caa-success",
 };
 
 const NOTIF_ICON: Record<string, string> = {
