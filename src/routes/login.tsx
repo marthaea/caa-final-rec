@@ -52,12 +52,14 @@ function LoginPage() {
     <div className="px-4 sm:px-6 py-10">
       <div className="mx-auto max-w-6xl grid grid-cols-1 md:grid-cols-[1.05fr_1fr] rounded-3xl overflow-hidden border border-caa-border bg-white shadow-[0_30px_80px_-40px_rgba(11,46,95,0.30)] min-h-[640px]">
         {/* LEFT — branded panel */}
-        <div className="caa-hero-bg p-10 md:p-12 text-white relative overflow-hidden">
-          {/* decorative blurred rings (subtle, no grid) */}
-          <div className="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-white/5 blur-2xl" />
-          <div className="absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-white/5 blur-2xl" />
+        <div
+          className="p-10 md:p-12 text-white relative overflow-hidden"
+          style={{ backgroundImage: "url('/aviation-hero.jfif')", backgroundSize: "cover", backgroundPosition: "center" }}
+        >
+          {/* Blue overlay */}
+          <div className="absolute inset-0 bg-caa-navy/75" />
 
-          <div className="relative flex flex-col h-full">
+          <div className="relative z-10 flex flex-col h-full">
             <div className="flex items-center gap-3">
               <span className="h-12 w-12 rounded-xl bg-white flex items-center justify-center shrink-0">
                 <img src={logo} alt="CAA Uganda" className="h-10 w-auto" />
