@@ -1009,24 +1009,48 @@ function AppsTab({ jobs, applications, jobId, cvStore, updateStatus, logAction, 
 
   const eligible = filtered.filter((a: Application) => a.status === "Pending" || a.status === "Under Review");
 
+  const exportCsv = () => {
+    const label = statusFilter === "all" ? "all" : statusFilter.toLowerCase().replace(/\s+/g, "-");
+    const rows: (string | number)[][] = [
+      ["ID", "Candidate Name", "Email", "Role", "Department", "Date Submitted", "Status", "Completion %"],
+      ...displayed.map((a: Application) => [
+        a.id, a.candidateName ?? "", a.candidateEmail ?? "", a.title, a.dept, a.date, a.status, a.completion,
+      ]),
+    ];
+    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `caa-applications-${label}-${Date.now()}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-3">
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <h1 className="font-bold text-xl text-caa-body">{job ? `Applications — ${job.title}` : "All Applications"}</h1>
-        {canAccess(role, "canShortlist", perms) && (
-          eligible.length > 0 ? (
-            <button
-              onClick={runScreening}
-              className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-semibold bg-caa-navy text-white rounded-md hover:bg-caa-navy-2 shrink-0"
-            >
-              <FileSearch className="h-4 w-4" /> Run Auto-Screening ({eligible.length})
-            </button>
-          ) : filtered.length > 0 ? (
-            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-caa-success bg-caa-success/10 rounded-full shrink-0">
-              <CheckCircle2 className="h-3.5 w-3.5" /> All applicants screened
-            </span>
-          ) : null
-        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={exportCsv}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold border border-caa-border text-caa-body rounded-md hover:border-caa-navy hover:text-caa-navy"
+          >
+            <FileDown className="h-3.5 w-3.5" /> Export CSV {statusFilter !== "all" && `(${displayed.length})`}
+          </button>
+          {canAccess(role, "canShortlist", perms) && (
+            eligible.length > 0 ? (
+              <button
+                onClick={runScreening}
+                className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-semibold bg-caa-navy text-white rounded-md hover:bg-caa-navy-2 shrink-0"
+              >
+                <FileSearch className="h-4 w-4" /> Run Auto-Screening ({eligible.length})
+              </button>
+            ) : filtered.length > 0 ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-caa-success bg-caa-success/10 rounded-full shrink-0">
+                <CheckCircle2 className="h-3.5 w-3.5" /> All applicants screened
+              </span>
+            ) : null
+          )}
+        </div>
       </div>
 
       {/* Screening result panel */}

@@ -27,6 +27,55 @@ const NOTIF_ICON: Record<string, string> = {
   shortlisted: "✅", declined: "❌", interview: "📅", offered: "🎉", info: "ℹ️",
 };
 
+const PIPE_STEPS = ["Applied", "Shortlisted", "Interview", "Offered"] as const;
+const PIPE_INDEX: Record<Application["status"], number> = {
+  Pending: 0, "Under Review": 0, Shortlisted: 1, Interview: 2, Offered: 3, Declined: -1,
+};
+
+function AppPipeline({ status }: { status: Application["status"] }) {
+  const declined = status === "Declined";
+  const current = PIPE_INDEX[status] ?? 0;
+  return (
+    <div className="flex items-center gap-0 mt-3 w-full max-w-xs">
+      {PIPE_STEPS.map((label, i) => {
+        const done    = !declined && i < current;
+        const active  = !declined && i === current;
+        const isDone  = done || (!declined && i < current);
+        return (
+          <div key={label} className="flex items-center flex-1 min-w-0">
+            <div className="flex flex-col items-center shrink-0">
+              <div className={`h-5 w-5 rounded-full flex items-center justify-center transition-colors
+                ${declined ? "bg-caa-border"
+                  : done    ? "bg-caa-success"
+                  : active  ? "bg-caa-navy"
+                  : "bg-caa-surface border border-caa-border"}`}
+              >
+                {done ? (
+                  <Check className="h-3 w-3 text-white" strokeWidth={3} />
+                ) : (
+                  <span className={`text-[9px] font-bold ${active ? "text-white" : "text-caa-muted"}`}>{i + 1}</span>
+                )}
+              </div>
+              <span className={`text-[9px] mt-0.5 whitespace-nowrap font-medium
+                ${declined ? "text-caa-muted"
+                  : done    ? "text-caa-success"
+                  : active  ? "text-caa-navy"
+                  : "text-caa-muted"}`}
+              >{label}</span>
+            </div>
+            {i < PIPE_STEPS.length - 1 && (
+              <div className={`h-px flex-1 mx-1 mb-3.5 ${isDone && !declined ? "bg-caa-success" : "bg-caa-border"}`} />
+            )}
+          </div>
+        );
+      })}
+      {declined && (
+        <span className="ml-2 px-2 py-0.5 text-[9px] font-bold rounded-full bg-caa-danger/10 text-caa-danger shrink-0">Declined</span>
+      )}
+    </div>
+  );
+}
+
 function DashboardPage() {
   const { auth, applications, jobs, withdrawApplication, updateProfile, pushToast, notifications, markNotificationRead } = useApp();
   const navigate = useNavigate();
@@ -189,6 +238,7 @@ function DashboardPage() {
                           {a.completion}% tailored
                         </span>
                       </div>
+                      <AppPipeline status={a.status} />
                     </div>
                     </div>
                     <div className="flex items-center gap-2 sm:flex-col sm:items-end">
