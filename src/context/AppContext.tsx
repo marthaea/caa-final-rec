@@ -205,6 +205,9 @@ type Ctx = {
   withdrawApplication: (id: number) => void;
   addApplication: (a: Omit<Application, "id" | "date" | "status">) => Application;
   updateApplicationStatus: (appId: number, status: ApplicationStatus, notifyEmail?: string, notifyMessage?: string) => void;
+  /** Apply many status changes in one state update + one localStorage write — use this instead
+   *  of calling updateApplicationStatus in a loop (batch screening, bulk interview approval). */
+  bulkUpdateApplicationStatus: (updates: { id: number; status: ApplicationStatus }[]) => void;
   signInPromptOpen: boolean;
   openSignInPrompt: () => void;
   closeSignInPrompt: () => void;
@@ -225,6 +228,8 @@ type Ctx = {
   savePermissionOverride: (p: PermissionOverride) => void;
   sentEmails: SentEmail[];
   logEmail: (e: Omit<SentEmail, "id" | "sentAt">) => void;
+  /** Log many emails in one state update + one localStorage write — use instead of logEmail in a loop. */
+  bulkLogEmails: (emails: Omit<SentEmail, "id" | "sentAt">[]) => void;
   clearEmailLog: () => void;
 };
 
@@ -369,10 +374,11 @@ function generateSeedApplications(): Application[] {
 
 const APPLICATIONS: Application[] = [
   // ── Pinned demo entries (IDs 1–8) — specific scenarios kept intact ───────
-  // IDs 1, 20, 21 are CANDIDATE_DEMO's own applications (3 total, 1 shortlisted) — used to demo the candidate dashboard.
+  // ID 1 is CANDIDATE_DEMO's headline (Shortlisted) application — the other two of their
+  // three demo applications (IDs 20, 21) are scattered into the bulk list below instead of
+  // sitting right here, so "John Bukenya" doesn't appear three times in a row at the top of
+  // the admin's All Applications view.
   { id: 1, jobId: 1, abbr: "ATC", title: "Senior Air Traffic Controller", dept: "Air Traffic Mgmt", date: "Jun 3, 2026", status: "Shortlisted", completion: 100, candidateName: "John Bukenya", candidateEmail: "j.bukenya@gmail.com" },
-  { id: 20, jobId: 3, abbr: "SYS", title: "Systems Administrator", dept: "ICT & Systems", date: "May 20, 2026", status: "Under Review", completion: 90, candidateName: "John Bukenya", candidateEmail: "j.bukenya@gmail.com" },
-  { id: 21, jobId: 13, abbr: "NET", title: "Network Engineer", dept: "ICT & Systems", date: "Jun 10, 2026", status: "Pending", completion: 65, candidateName: "John Bukenya", candidateEmail: "j.bukenya@gmail.com" },
   { id: 2, jobId: 4, abbr: "FIN", title: "Finance Officer (Revenue Assurance)", dept: "Finance & Admin", date: "May 28, 2026", status: "Under Review", completion: 85, candidateName: "Mary Auma", candidateEmail: "m.auma@gmail.com" },
   { id: 3, jobId: 3, abbr: "SYS", title: "Systems Administrator", dept: "ICT & Systems", date: "May 15, 2026", status: "Pending", completion: 60, candidateName: "Peter Nkutu", candidateEmail: "p.nkutu@gmail.com" },
   { id: 4, jobId: 6, abbr: "ATT", title: "ATC Trainee (Graduate Entry)", dept: "Air Traffic Mgmt", date: "Jun 1, 2026", status: "Shortlisted", completion: 95, candidateName: "Kevin Ssali", candidateEmail: "k.ssali@student.mak.ac.ug", cgpa: 4.7, university: "Makerere University" },
@@ -380,8 +386,18 @@ const APPLICATIONS: Application[] = [
   { id: 6, jobId: 6, abbr: "ATT", title: "ATC Trainee (Graduate Entry)", dept: "Air Traffic Mgmt", date: "Jun 3, 2026", status: "Pending", completion: 80, candidateName: "Ivan Mucunguzi", candidateEmail: "i.mucunguzi@student.ucu.ac.ug", cgpa: 3.9, university: "Uganda Christian University" },
   { id: 7, jobId: 6, abbr: "ATT", title: "ATC Trainee (Graduate Entry)", dept: "Air Traffic Mgmt", date: "Jun 5, 2026", status: "Pending", completion: 70, candidateName: "Stella Nabirye", candidateEmail: "s.nabirye@student.must.ac.ug", cgpa: 3.6, university: "Mbarara University" },
   { id: 8, jobId: 6, abbr: "ATT", title: "ATC Trainee (Graduate Entry)", dept: "Air Traffic Mgmt", date: "Jun 7, 2026", status: "Declined", completion: 55, candidateName: "Ronald Oulanyah", candidateEmail: "r.oulanyah@student.gulu.ac.ug", cgpa: 2.8, university: "Gulu University" },
-  // ── Generated bulk (IDs 100+, ~907 entries) ──────────────────────────────
-  ...generateSeedApplications(),
+  // ── Generated bulk (IDs 100+, ~907 entries), with CANDIDATE_DEMO's other 2 applications
+  // (IDs 20, 21) spliced in at scattered positions — see note above. ─────────
+  ...(() => {
+    const bulk = generateSeedApplications();
+    const extra: Application[] = [
+      { id: 20, jobId: 3, abbr: "SYS", title: "Systems Administrator", dept: "ICT & Systems", date: "May 20, 2026", status: "Under Review", completion: 90, candidateName: "John Bukenya", candidateEmail: "j.bukenya@gmail.com" },
+      { id: 21, jobId: 13, abbr: "NET", title: "Network Engineer", dept: "ICT & Systems", date: "Jun 10, 2026", status: "Pending", completion: 65, candidateName: "John Bukenya", candidateEmail: "j.bukenya@gmail.com" },
+    ];
+    bulk.splice(Math.floor(bulk.length / 3), 0, extra[0]);
+    bulk.splice(Math.floor((bulk.length * 2) / 3), 0, extra[1]);
+    return bulk;
+  })(),
 ];
 
 const DEFAULT_SETTINGS: AdminSettings = {
@@ -520,6 +536,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const bulkUpdateApplicationStatus: Ctx["bulkUpdateApplicationStatus"] = (updates) => {
+    if (updates.length === 0) return;
+    const byId = new Map(updates.map((u) => [u.id, u.status]));
+    setApplications((prev) => {
+      const next = prev.map((a) => byId.has(a.id) ? { ...a, status: byId.get(a.id)! } : a);
+      try { localStorage.setItem(APPS_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+
   const addJob: Ctx["addJob"] = (j) => {
     const id = Math.max(0, ...jobs.map((x) => x.id)) + 1;
     const abbr = j.title.split(/\s+/).slice(0, 1).map((w) => w.slice(0, 3).toUpperCase()).join("");
@@ -615,6 +641,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const bulkLogEmails: Ctx["bulkLogEmails"] = (emails) => {
+    if (emails.length === 0) return;
+    const base = Date.now();
+    const entries: SentEmail[] = emails.map((e, i) => ({ ...e, id: base + i, sentAt: new Date().toISOString() }));
+    setSentEmails((prev) => {
+      const next = [...entries.reverse(), ...prev];
+      try { localStorage.setItem(EMAILS_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+
   const clearEmailLog: Ctx["clearEmailLog"] = () => {
     setSentEmails([]);
     try { localStorage.removeItem(EMAILS_KEY); } catch {}
@@ -626,7 +663,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         auth, signIn, signOut, updateProfile,
         toasts, pushToast, dismissToast,
         jobs, addJob, updateJob, deleteJob, canSeeJob, isExpired,
-        applications, withdrawApplication, addApplication, updateApplicationStatus,
+        applications, withdrawApplication, addApplication, updateApplicationStatus, bulkUpdateApplicationStatus,
         signInPromptOpen,
         openSignInPrompt: () => setSignInPromptOpen(true),
         closeSignInPrompt: () => setSignInPromptOpen(false),
@@ -635,7 +672,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         notifications, sendNotification, markNotificationRead,
         criteria, saveCriteria,
         permissionOverrides, savePermissionOverride,
-        sentEmails, logEmail, clearEmailLog,
+        sentEmails, logEmail, bulkLogEmails, clearEmailLog,
       }}
     >
       {children}

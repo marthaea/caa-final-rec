@@ -81,10 +81,10 @@ type AdminTab = typeof ALL_NAV[number]["key"];
 
 function AdminPage() {
   const { auth, signIn, jobs, addJob, updateJob, deleteJob, isExpired, applications,
-          pushToast, audit, settings, updateSettings, logAction, updateApplicationStatus,
+          pushToast, audit, settings, updateSettings, logAction, updateApplicationStatus, bulkUpdateApplicationStatus,
           notifications, criteria, saveCriteria,
           permissionOverrides, savePermissionOverride, cvStore,
-          sentEmails, logEmail, clearEmailLog } = useApp();
+          sentEmails, logEmail, bulkLogEmails, clearEmailLog } = useApp();
   const { tab = auth.accountType === "admin" ? "dashboard" : "login", jobId } = Route.useSearch();
   const navigate = useNavigate();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -200,7 +200,7 @@ function AdminPage() {
         <div className="px-4 sm:px-6 py-4 sm:py-6 max-w-5xl">
           {tab === "dashboard"   && <DashboardTab jobs={jobs} applications={applications} isExpired={isExpired} navigate={navigate} role={role} />}
           {tab === "jobs"        && canAccess(role, "canManageJobs", perms) && <JobsTab jobs={jobs} isExpired={isExpired} addJob={addJob} updateJob={updateJob} deleteJob={deleteJob} onViewApps={(id: number) => navigate({ to: "/admin", search: { tab: "apps", jobId: id } })} />}
-          {tab === "apps"        && canAccess(role, "canViewApplications", perms) && <AppsTab jobs={jobs} applications={applications} jobId={jobId} cvStore={cvStore} updateStatus={updateApplicationStatus} logAction={logAction} actor={actor} criteria={criteria} role={role} perms={perms} logEmail={logEmail} />}
+          {tab === "apps"        && canAccess(role, "canViewApplications", perms) && <AppsTab jobs={jobs} applications={applications} jobId={jobId} cvStore={cvStore} updateStatus={updateApplicationStatus} bulkUpdateStatus={bulkUpdateApplicationStatus} logAction={logAction} actor={actor} criteria={criteria} role={role} perms={perms} logEmail={logEmail} bulkLogEmails={bulkLogEmails} />}
           {tab === "emails"      && canAccess(role, "canViewApplications", perms) && <EmailsTab sentEmails={sentEmails} clearEmailLog={clearEmailLog} />}
           {tab === "interns"     && canAccess(role, "canViewApplications", perms) && <InternsTab applications={applications} jobs={jobs} actor={actor} />}
           {tab === "staff"       && canAccess(role, "canViewStaff", perms) && <StaffTab actor={actor} logAction={logAction} />}
@@ -985,54 +985,72 @@ function autoQualify(app: Application, job: Job | undefined, cv: any, jobCriteri
 
 type ScreeningResult = { app: Application; ok: boolean; checks: { label: string; pass: boolean; detail: string }[] };
 
-function AppsTab({ jobs, applications, jobId, cvStore, updateStatus, logAction, actor, criteria, role, perms, logEmail }: any) {
+function AppsTab({ jobs, applications, jobId, cvStore, updateStatus, bulkUpdateStatus, logAction, actor, criteria, role, perms, logEmail, bulkLogEmails }: any) {
   const filtered = jobId ? applications.filter((a: Application) => a.jobId === jobId) : applications;
   const job = jobs.find((j: Job) => j.id === jobId);
   const [selected, setSelected] = useState<Application | null>(null);
   const [statusFilter, setStatusFilter] = useState("all");
   const [screeningResult, setScreeningResult] = useState<{ results: ScreeningResult[]; confirmed: boolean } | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const displayed = statusFilter === "all" ? filtered : filtered.filter((a: Application) => a.status === statusFilter);
 
   const approveAllForInterview = () => {
-    const shortlisted = filtered.filter((a: Application) => a.status === "Shortlisted");
-    shortlisted.forEach((a: Application) => {
-      updateStatus(a.id, "Interview", a.candidateEmail, undefined);
-      const { subject, body } = buildEmail("Interview", a.candidateName ?? "Applicant", a.title);
-      logEmail({ to: a.candidateEmail ?? "", candidateName: a.candidateName ?? "Applicant", subject, body, trigger: "Interview Approval", jobTitle: a.title });
-    });
-    logAction(`Approved ${shortlisted.length} shortlisted candidates for interview`);
-    setStatusFilter("Interview");
+    setIsProcessing(true);
+    // Let the loading state paint before the (synchronous) bulk write runs.
+    setTimeout(() => {
+      const shortlisted = filtered.filter((a: Application) => a.status === "Shortlisted");
+      bulkUpdateStatus(shortlisted.map((a: Application) => ({ id: a.id, status: "Interview" })));
+      bulkLogEmails(shortlisted.map((a: Application) => {
+        const { subject, body } = buildEmail("Interview", a.candidateName ?? "Applicant", a.title);
+        return { to: a.candidateEmail ?? "", candidateName: a.candidateName ?? "Applicant", subject, body, trigger: "Interview Approval", jobTitle: a.title };
+      }));
+      logAction(`Approved ${shortlisted.length} shortlisted candidates for interview`);
+      setStatusFilter("Interview");
+      setIsProcessing(false);
+    }, 0);
   };
 
   const runScreening = () => {
-    const eligible = filtered.filter((a: Application) => a.status === "Pending" || a.status === "Under Review");
-    const results: ScreeningResult[] = eligible.map((a: Application) => {
-      const j = jobs.find((jj: Job) => jj.id === a.jobId);
-      const cv = cvStore[a.candidateEmail?.toLowerCase() ?? ""];
-      const c = criteria.find((cr: JobCriteria) => cr.jobId === a.jobId);
-      const { ok, checks } = autoQualify(a, j, cv, c);
-      return { app: a, ok, checks };
-    });
-    setScreeningResult({ results, confirmed: false });
+    setIsProcessing(true);
+    setTimeout(() => {
+      const eligible = filtered.filter((a: Application) => a.status === "Pending" || a.status === "Under Review");
+      const results: ScreeningResult[] = eligible.map((a: Application) => {
+        const j = jobs.find((jj: Job) => jj.id === a.jobId);
+        const cv = cvStore[a.candidateEmail?.toLowerCase() ?? ""];
+        const c = criteria.find((cr: JobCriteria) => cr.jobId === a.jobId);
+        const { ok, checks } = autoQualify(a, j, cv, c);
+        return { app: a, ok, checks };
+      });
+      setScreeningResult({ results, confirmed: false });
+      setIsProcessing(false);
+    }, 0);
   };
 
   const confirmScreening = () => {
     if (!screeningResult) return;
-    const passed = screeningResult.results.filter((r) => r.ok);
-    const failed = screeningResult.results.filter((r) => !r.ok);
-    passed.forEach((r) => {
-      updateStatus(r.app.id, "Shortlisted", r.app.candidateEmail, undefined);
-      const { subject, body } = buildEmail("Shortlisted", r.app.candidateName ?? "Applicant", r.app.title);
-      logEmail({ to: r.app.candidateEmail ?? "", candidateName: r.app.candidateName ?? "Applicant", subject, body, trigger: "Batch Screening", jobTitle: r.app.title });
-    });
-    failed.forEach((r) => {
-      updateStatus(r.app.id, "Declined", r.app.candidateEmail, undefined);
-      const { subject, body } = buildEmail("Declined", r.app.candidateName ?? "Applicant", r.app.title);
-      logEmail({ to: r.app.candidateEmail ?? "", candidateName: r.app.candidateName ?? "Applicant", subject, body, trigger: "Batch Screening", jobTitle: r.app.title });
-    });
-    logAction(`Auto-screening: shortlisted ${passed.length}, declined ${failed.length}`);
-    setScreeningResult((prev) => prev ? { ...prev, confirmed: true } : null);
+    setIsProcessing(true);
+    setTimeout(() => {
+      const passed = screeningResult.results.filter((r) => r.ok);
+      const failed = screeningResult.results.filter((r) => !r.ok);
+      bulkUpdateStatus([
+        ...passed.map((r) => ({ id: r.app.id, status: "Shortlisted" as const })),
+        ...failed.map((r) => ({ id: r.app.id, status: "Declined" as const })),
+      ]);
+      bulkLogEmails([
+        ...passed.map((r) => {
+          const { subject, body } = buildEmail("Shortlisted", r.app.candidateName ?? "Applicant", r.app.title);
+          return { to: r.app.candidateEmail ?? "", candidateName: r.app.candidateName ?? "Applicant", subject, body, trigger: "Batch Screening", jobTitle: r.app.title };
+        }),
+        ...failed.map((r) => {
+          const { subject, body } = buildEmail("Declined", r.app.candidateName ?? "Applicant", r.app.title);
+          return { to: r.app.candidateEmail ?? "", candidateName: r.app.candidateName ?? "Applicant", subject, body, trigger: "Batch Screening", jobTitle: r.app.title };
+        }),
+      ]);
+      logAction(`Auto-screening: shortlisted ${passed.length}, declined ${failed.length}`);
+      setScreeningResult((prev) => prev ? { ...prev, confirmed: true } : null);
+      setIsProcessing(false);
+    }, 0);
   };
 
   const exportScreeningReport = () => {
@@ -1083,9 +1101,11 @@ function AppsTab({ jobs, applications, jobId, cvStore, updateStatus, logAction, 
             eligible.length > 0 ? (
               <button
                 onClick={runScreening}
-                className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-semibold bg-caa-navy text-white rounded-md hover:bg-caa-navy-2 shrink-0"
+                disabled={isProcessing}
+                className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-semibold bg-caa-navy text-white rounded-md hover:bg-caa-navy-2 shrink-0 disabled:opacity-60 disabled:cursor-wait"
               >
-                <FileSearch className="h-4 w-4" /> Run Auto-Screening ({eligible.length})
+                {isProcessing ? <RefreshCw className="h-4 w-4 animate-spin" /> : <FileSearch className="h-4 w-4" />}
+                {isProcessing ? "Screening…" : `Run Auto-Screening (${eligible.length})`}
               </button>
             ) : filtered.length > 0 ? (
               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-caa-success bg-caa-success/10 rounded-full shrink-0">
@@ -1142,8 +1162,13 @@ function AppsTab({ jobs, applications, jobId, cvStore, updateStatus, logAction, 
           </div>
 
           <div className="flex gap-2 pt-1 flex-wrap">
-            <button onClick={confirmScreening} className="px-4 py-2 text-sm font-semibold bg-caa-navy text-white rounded-md hover:bg-caa-navy-2">
-              Confirm & Apply Results
+            <button
+              onClick={confirmScreening}
+              disabled={isProcessing || screeningResult.confirmed}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-caa-navy text-white rounded-md hover:bg-caa-navy-2 disabled:opacity-60 disabled:cursor-wait"
+            >
+              {isProcessing && <RefreshCw className="h-4 w-4 animate-spin" />}
+              {isProcessing ? "Applying…" : "Confirm & Apply Results"}
             </button>
             <button onClick={exportScreeningReport} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold border border-caa-navy text-caa-navy rounded-md hover:bg-caa-navy/5">
               <FileDown className="h-4 w-4" /> Export Report PDF
@@ -1237,9 +1262,11 @@ function AppsTab({ jobs, applications, jobId, cvStore, updateStatus, logAction, 
           </div>
           <button
             onClick={approveAllForInterview}
-            className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-purple-700 text-white rounded-md hover:bg-purple-800"
+            disabled={isProcessing}
+            className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-purple-700 text-white rounded-md hover:bg-purple-800 disabled:opacity-60 disabled:cursor-wait"
           >
-            <CheckCircle2 className="h-3.5 w-3.5" /> Approve All for Interview
+            {isProcessing ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+            {isProcessing ? "Approving…" : "Approve All for Interview"}
           </button>
         </div>
       )}
