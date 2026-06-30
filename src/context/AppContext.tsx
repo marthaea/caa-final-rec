@@ -37,6 +37,14 @@ export type ScreeningQuestion = {
   id: string;
   text: string;
   type: "qualifier" | "disqualifier";
+  /** How the candidate answers this question on the application form. Legacy questions
+   *  (created before this field existed) have no `kind` and fall back to fuzzy CV-text matching. */
+  kind?: "yesno" | "number";
+  /** kind: "yesno" — the answer ("Yes" | "No") that keeps the candidate eligible. */
+  qualifyingAnswer?: "Yes" | "No";
+  /** kind: "number" — inclusive range the candidate's numeric answer must fall within to stay eligible. */
+  min?: number;
+  max?: number;
 };
 
 export type JobCriteria = {
@@ -105,7 +113,29 @@ export type Application = {
   status: ApplicationStatus; completion: number;
   jobId?: number; candidateEmail?: string; candidateName?: string;
   cgpa?: number; university?: string;
+  /** Candidate's answers to the job's screening questions, keyed by ScreeningQuestion.id. */
+  screeningAnswers?: Record<string, string>;
 };
+
+const NON_WITHDRAWABLE_STATUSES: ApplicationStatus[] = ["Shortlisted", "Interview", "Offered"];
+export function canWithdraw(status: ApplicationStatus): boolean {
+  return !NON_WITHDRAWABLE_STATUSES.includes(status);
+}
+
+/** Evaluate one screening-question answer precisely. Pass = stays eligible. Legacy
+ *  text-only questions (no `kind`) have no structured answer to check — they're scored
+ *  from the CV via fuzzy keyword matching instead, so they always pass here. */
+export function screeningAnswerPasses(q: ScreeningQuestion, answer: string | undefined): boolean {
+  if (q.kind === "yesno") return !!answer && answer === (q.qualifyingAnswer ?? "Yes");
+  if (q.kind === "number") {
+    const n = answer !== undefined && answer !== "" ? Number(answer) : NaN;
+    if (Number.isNaN(n)) return false;
+    if (q.min !== undefined && n < q.min) return false;
+    if (q.max !== undefined && n > q.max) return false;
+    return true;
+  }
+  return true;
+}
 
 export type ToastType = "success" | "info" | "warning";
 export type Toast = { id: number; type: ToastType; title: string; message?: string };
@@ -228,6 +258,9 @@ export const HR_USERS: Record<string, { firstName: string; lastName: string; pas
 
 export function isCAAEmail(email: string) { return /@caa\.co\.ug$/i.test(email.trim()); }
 export const ADMIN_DEMO = { email: "admin@caa.co.ug", password: "Admin@2026" };
+/** Sign in with this email (any password) on /login to see a candidate account with a realistic,
+ *  small set of applications instead of a brand-new empty one. */
+export const CANDIDATE_DEMO = { email: "j.bukenya@gmail.com", firstName: "John", lastName: "Bukenya" };
 
 const JOBS: Job[] = [
   { id: 1, abbr: "ATC", title: "Senior Air Traffic Controller", dept: "Air Traffic Mgmt", deptKey: "atm", location: "Entebbe Airport", salary: "UGX 4.2M–5.8M", salaryBand: "UG4", type: "Full-time", closes: "Jun 15, 2026", closesAt: "2026-06-15", visibility: "external", minAge: 25, requiredExperience: 5, requiredQualification: "Degree", featured: true, description: "Direct en-route and approach traffic at Entebbe ACC." },
@@ -336,7 +369,10 @@ function generateSeedApplications(): Application[] {
 
 const APPLICATIONS: Application[] = [
   // ── Pinned demo entries (IDs 1–8) — specific scenarios kept intact ───────
+  // IDs 1, 20, 21 are CANDIDATE_DEMO's own applications (3 total, 1 shortlisted) — used to demo the candidate dashboard.
   { id: 1, jobId: 1, abbr: "ATC", title: "Senior Air Traffic Controller", dept: "Air Traffic Mgmt", date: "Jun 3, 2026", status: "Shortlisted", completion: 100, candidateName: "John Bukenya", candidateEmail: "j.bukenya@gmail.com" },
+  { id: 20, jobId: 3, abbr: "SYS", title: "Systems Administrator", dept: "ICT & Systems", date: "May 20, 2026", status: "Under Review", completion: 90, candidateName: "John Bukenya", candidateEmail: "j.bukenya@gmail.com" },
+  { id: 21, jobId: 13, abbr: "NET", title: "Network Engineer", dept: "ICT & Systems", date: "Jun 10, 2026", status: "Pending", completion: 65, candidateName: "John Bukenya", candidateEmail: "j.bukenya@gmail.com" },
   { id: 2, jobId: 4, abbr: "FIN", title: "Finance Officer (Revenue Assurance)", dept: "Finance & Admin", date: "May 28, 2026", status: "Under Review", completion: 85, candidateName: "Mary Auma", candidateEmail: "m.auma@gmail.com" },
   { id: 3, jobId: 3, abbr: "SYS", title: "Systems Administrator", dept: "ICT & Systems", date: "May 15, 2026", status: "Pending", completion: 60, candidateName: "Peter Nkutu", candidateEmail: "p.nkutu@gmail.com" },
   { id: 4, jobId: 6, abbr: "ATT", title: "ATC Trainee (Graduate Entry)", dept: "Air Traffic Mgmt", date: "Jun 1, 2026", status: "Shortlisted", completion: 95, candidateName: "Kevin Ssali", candidateEmail: "k.ssali@student.mak.ac.ug", cgpa: 4.7, university: "Makerere University" },
@@ -448,6 +484,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const withdrawApplication = (id: number) => {
+    const app = applications.find((a) => a.id === id);
+    if (app && !canWithdraw(app.status)) return;
     persistApps(applications.filter((a) => a.id !== id));
   };
 
@@ -463,8 +501,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   const updateApplicationStatus: Ctx["updateApplicationStatus"] = (appId, status, notifyEmail, notifyMessage) => {
-    const next = applications.map((a) => a.id === appId ? { ...a, status } : a);
-    persistApps(next);
+    // Functional update — this is called in tight loops (batch screening, bulk interview
+    // approval) where React batches the state updates. Reading the `applications` closure
+    // directly would make every call in the loop overwrite the previous one, leaving only
+    // the last candidate in the batch actually updated.
+    setApplications((prev) => {
+      const next = prev.map((a) => a.id === appId ? { ...a, status } : a);
+      try { localStorage.setItem(APPS_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
     if (notifyEmail && notifyMessage) {
       const type: Notification["type"] =
         status === "Shortlisted" ? "shortlisted" :
@@ -532,13 +577,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const sendNotification: Ctx["sendNotification"] = (recipientEmail, title, message, type) => {
     const notif: Notification = {
-      id: Date.now(),
+      id: Date.now() + Math.random(),
       recipientEmail: recipientEmail.toLowerCase(),
       title, message, read: false,
       at: new Date().toISOString(),
       type,
     };
-    persistNotifs([notif, ...notifications]);
+    setNotifications((prev) => {
+      const next = [notif, ...prev];
+      try { localStorage.setItem(NOTIF_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
   };
 
   const markNotificationRead = (id: number) => {

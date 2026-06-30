@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Check, Circle, Bell, FileText, Eye, Users, Award, Mail, Pencil, X, UserCog, Download } from "lucide-react";
-import { useApp, type Application } from "@/context/AppContext";
+import { useApp, canWithdraw, type Application } from "@/context/AppContext";
 import { downloadApplicationSummary } from "@/lib/admin-pdf";
 
 export const Route = createFileRoute("/dashboard")({
@@ -92,6 +92,10 @@ function DashboardPage() {
   }, [auth.isLoggedIn, navigate]);
 
   if (!auth.isLoggedIn) return null;
+
+  const myApplications = applications.filter(
+    (a) => a.candidateEmail?.toLowerCase() === auth.email?.toLowerCase()
+  );
 
   const handleEdit = (a: Application) => {
     if (a.completion < 100) {
@@ -196,9 +200,9 @@ function DashboardPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
               {[
-                { l: "Applications Submitted", n: applications.length, color: "text-caa-navy" },
-                { l: "Shortlisted", n: applications.filter((a) => a.status === "Shortlisted").length, color: "text-caa-navy-2" },
-                { l: "Offers Received", n: 0, color: "text-caa-success" },
+                { l: "Applications Submitted", n: myApplications.length, color: "text-caa-navy" },
+                { l: "Shortlisted", n: myApplications.filter((a) => a.status === "Shortlisted").length, color: "text-caa-navy-2" },
+                { l: "Offers Received", n: myApplications.filter((a) => a.status === "Offered").length, color: "text-caa-success" },
               ].map((m) => (
                 <div key={m.l} className="caa-card p-5">
                   <p className="text-xs text-caa-muted">{m.l}</p>
@@ -213,12 +217,12 @@ function DashboardPage() {
                 <span className="text-xs text-caa-muted">Edit or withdraw any active application</span>
               </div>
               <div className="divide-y divide-caa-border">
-                {applications.length === 0 && (
+                {myApplications.length === 0 && (
                   <div className="px-5 py-10 text-center text-sm text-caa-muted">
                     You have no active applications. <Link to="/vacancies" className="text-caa-navy hover:text-caa-gold underline">Browse vacancies</Link>
                   </div>
                 )}
-                {applications.map((a) => (
+                {myApplications.map((a) => (
                   <div key={a.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-4">
                     <div className="flex items-center gap-4 flex-1 min-w-0">
                     <span className="h-10 w-10 rounded-full bg-caa-surface text-caa-navy text-xs font-semibold flex items-center justify-center shrink-0">
@@ -263,12 +267,21 @@ function DashboardPage() {
                         >
                           <Download className="h-3 w-3" /> PDF
                         </button>
-                        <button
-                          onClick={() => setConfirmId(a.id)}
-                          className="px-2.5 py-1.5 text-xs border border-caa-danger/40 text-caa-danger rounded-md hover:bg-caa-danger/5 inline-flex items-center gap-1"
-                        >
-                          <X className="h-3 w-3" /> Withdraw
-                        </button>
+                        {canWithdraw(a.status) ? (
+                          <button
+                            onClick={() => setConfirmId(a.id)}
+                            className="px-2.5 py-1.5 text-xs border border-caa-danger/40 text-caa-danger rounded-md hover:bg-caa-danger/5 inline-flex items-center gap-1"
+                          >
+                            <X className="h-3 w-3" /> Withdraw
+                          </button>
+                        ) : (
+                          <span
+                            className="px-2.5 py-1.5 text-xs border border-caa-border text-caa-muted/70 rounded-md inline-flex items-center gap-1 cursor-not-allowed"
+                            title="Applications can no longer be withdrawn once shortlisted"
+                          >
+                            <X className="h-3 w-3" /> Withdraw
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>

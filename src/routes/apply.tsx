@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { ChevronLeft, ChevronRight, Plus, Trash2, Check, AlertCircle, Pencil, Upload } from "lucide-react";
-import { useApp, EMPTY_CV, type CvProfile, type CvQualification, type QualLevel } from "@/context/AppContext";
+import { useApp, EMPTY_CV, screeningAnswerPasses, type CvProfile, type CvQualification, type QualLevel, type ScreeningQuestion } from "@/context/AppContext";
 import { SuccessModal } from "@/components/SuccessModal";
 import { O_LEVEL_SUBJECTS, A_LEVEL_SUBJECTS, O_LEVEL_GRADES, A_LEVEL_GRADES, QUAL_LEVELS, UGANDAN_UNIVERSITIES, COMMON_COURSES } from "@/lib/uganda-curriculum";
 import { extractPdfText } from "@/lib/pdf-extract";
@@ -13,21 +13,27 @@ export const Route = createFileRoute("/apply")({
   component: ApplyPage,
 });
 
-const STEPS = ["Personal", "Qualifications", "Skills", "Experience", "Referees", "Next of Kin", "Photo", "Review"];
-
 function input(cls = "") { return "w-full px-2.5 py-1.5 text-sm border border-caa-border rounded-md focus:outline-none focus:border-caa-navy bg-white " + cls; }
 const label = "block text-xs font-medium text-caa-body mb-1";
 
 function ApplyPage() {
-  const { auth, openSignInPrompt, jobs, cv, hasCv, saveCv, addApplication, pushToast } = useApp();
+  const { auth, openSignInPrompt, jobs, cv, hasCv, saveCv, addApplication, updateApplicationStatus, criteria, pushToast } = useApp();
   const { jobId } = Route.useSearch();
   const navigate = useNavigate();
   const job = jobs.find((j) => j.id === jobId) ?? jobs[0];
 
   useEffect(() => { if (!auth.isLoggedIn) openSignInPrompt(); }, [auth.isLoggedIn, openSignInPrompt]);
 
+  const screeningQs = useMemo(
+    () => criteria.find((c) => c.jobId === job.id)?.screeningQuestions ?? [],
+    [criteria, job.id]
+  );
+  const hasScreening = screeningQs.length > 0;
+  const [screeningAnswers, setScreeningAnswers] = useState<Record<string, string>>({});
+
   // If CV already built, start at Review for "edit before resubmit"
-  const [step, setStep] = useState(hasCv ? STEPS.length - 1 : 0);
+  const TOTAL_STEPS = hasScreening ? 9 : 8;
+  const [step, setStep] = useState(hasCv ? TOTAL_STEPS - 1 : 0);
   const [data, setData] = useState<CvProfile>(() => {
     if (hasCv) return cv;
     return { ...EMPTY_CV, personal: { ...EMPTY_CV.personal, firstName: auth.firstName, lastName: auth.lastName, email: auth.email } };
@@ -40,18 +46,82 @@ function ApplyPage() {
     return age >= job.minAge;
   }, [data.personal.dob, job.minAge]);
 
+  /* ---------- step definitions (Eligibility step only exists when the job has screening questions) ---------- */
+  const personalStep = () => renderPersonalStep();
+  const nextOfKinStep = () => renderNextOfKinStep();
+  const photoStep = () => renderPhotoStep();
+  const eligibilityStep = () => (
+    <EligibilityStep questions={screeningQs} answers={screeningAnswers} onChange={(id: string, v: string) => setScreeningAnswers((s) => ({ ...s, [id]: v }))} />
+  );
+
+  const stepDefs = useMemo(() => [
+    { label: "Personal", render: personalStep },
+    ...(hasScreening ? [{ label: "Eligibility", render: eligibilityStep }] : []),
+    { label: "Qualifications", render: () => <QualificationsStep data={data} setData={setData} /> },
+    { label: "Skills", render: () => <SkillsStep data={data} setData={setData} /> },
+    { label: "Experience", render: () => <ExperienceStep data={data} setData={setData} /> },
+    { label: "Referees", render: () => <RefereesStep data={data} setData={setData} /> },
+    { label: "Next of Kin", render: nextOfKinStep },
+    { label: "Passport Photo", render: photoStep },
+    { label: "Review", render: () => renderReviewStep() },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [data, screeningAnswers, hasScreening, screeningQs, ageOk]);
+
+  const STEPS = stepDefs.map((d) => d.label);
+  const reviewStepIndex = stepDefs.findIndex((d) => d.label === "Review");
+
   const next = () => setStep((s) => Math.min(s + 1, STEPS.length - 1));
   const back = () => setStep((s) => Math.max(s - 1, 0));
 
+  /* ---------- required-field validation ---------- */
+  const getMissingFields = (): { label: string; step: number }[] => {
+    const missing: { label: string; step: number }[] = [];
+    const stepIndex = (l: string) => stepDefs.findIndex((d) => d.label === l);
+    const p = data.personal;
+    if (!p.firstName.trim()) missing.push({ label: "First name", step: stepIndex("Personal") });
+    if (!p.lastName.trim()) missing.push({ label: "Surname", step: stepIndex("Personal") });
+    if (!p.phone.trim()) missing.push({ label: "Phone", step: stepIndex("Personal") });
+    if (!p.email.trim()) missing.push({ label: "Email", step: stepIndex("Personal") });
+    if (!p.dob) missing.push({ label: "Date of birth", step: stepIndex("Personal") });
+    if (!p.gender) missing.push({ label: "Gender", step: stepIndex("Personal") });
+    if (!p.nationality.trim()) missing.push({ label: "Nationality", step: stepIndex("Personal") });
+    if (!p.address.trim()) missing.push({ label: "Address", step: stepIndex("Personal") });
+    if (hasScreening) {
+      const unanswered = screeningQs.some((q) => !screeningAnswers[q.id]);
+      if (unanswered) missing.push({ label: "Eligibility questions", step: stepIndex("Eligibility") });
+    }
+    if (!data.highestLevel) missing.push({ label: "Highest level of education", step: stepIndex("Qualifications") });
+    if (data.qualifications.length === 0) missing.push({ label: "At least one qualification", step: stepIndex("Qualifications") });
+    const validReferees = data.referees.filter((r) => r.name.trim() && r.phone.trim() && r.email.trim());
+    if (validReferees.length < 2) missing.push({ label: "Two complete referees (name, phone, email)", step: stepIndex("Referees") });
+    if (!data.nextOfKin.name.trim()) missing.push({ label: "Next of kin name", step: stepIndex("Next of Kin") });
+    if (!data.nextOfKin.relationship) missing.push({ label: "Next of kin relationship", step: stepIndex("Next of Kin") });
+    if (!data.nextOfKin.phone.trim()) missing.push({ label: "Next of kin phone", step: stepIndex("Next of Kin") });
+    if (!data.photoFile) missing.push({ label: "Passport photo", step: stepIndex("Passport Photo") });
+    return missing;
+  };
+
   const submit = () => {
     if (ageOk === false) { pushToast({ type: "warning", title: `Minimum age for this role is ${job.minAge}` }); return; }
-    if (data.referees.filter((r) => r.name.trim()).length < 2) { pushToast({ type: "warning", title: "Provide at least two referees" }); return; }
+    const missing = getMissingFields();
+    if (missing.length > 0) {
+      pushToast({ type: "warning", title: "Application incomplete", message: `Please complete: ${missing.map((m) => m.label).join(", ")}` });
+      setStep(reviewStepIndex);
+      return;
+    }
     saveCv(data);
     const ref = "REF-2026-" + String(Math.floor(Math.random() * 100000)).padStart(5, "0");
-    addApplication({
+    const newApp = addApplication({
       abbr: job.abbr, title: job.title, dept: job.dept, jobId: job.id, completion: 100,
       candidateEmail: auth.email, candidateName: `${data.personal.firstName} ${data.personal.lastName}`.trim(),
+      screeningAnswers: hasScreening ? screeningAnswers : undefined,
     });
+    // Eligibility is enforced silently — the candidate always sees the normal success state,
+    // matching how a real applicant tracking system avoids tipping off auto-rejected candidates.
+    if (hasScreening) {
+      const eligible = screeningQs.every((q) => screeningAnswerPasses(q, screeningAnswers[q.id]));
+      if (!eligible) updateApplicationStatus(newApp.id, "Declined");
+    }
     setSubmitted(ref);
     pushToast({ type: "success", title: "Application submitted", message: "Your CV is saved and will pre-fill next time." });
   };
@@ -59,9 +129,9 @@ function ApplyPage() {
   /* ---------- per-step pieces ---------- */
   const setPersonal = (p: Partial<CvProfile["personal"]>) => setData({ ...data, personal: { ...data.personal, ...p } });
 
-  const renderStep = () => {
-    switch (step) {
-      case 0: return (
+  const renderStep = () => stepDefs[step]?.render() ?? null;
+
+  const renderPersonalStep = () => (
         <div className="space-y-4">
           {/* CV Quick-fill banner */}
           <div className="rounded-lg border border-caa-navy/20 bg-caa-navy/5 p-3 flex items-start gap-3">
@@ -189,12 +259,9 @@ function ApplyPage() {
             </div>
           </div>
         </div>
-      );
-      case 1: return <QualificationsStep data={data} setData={setData} />;
-      case 2: return <SkillsStep data={data} setData={setData} />;
-      case 3: return <ExperienceStep data={data} setData={setData} />;
-      case 4: return <RefereesStep data={data} setData={setData} />;
-      case 5: return (
+  );
+
+  const renderNextOfKinStep = () => (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div><label className={label}>Full name</label><input className={input()} value={data.nextOfKin.name} onChange={(e) => setData({ ...data, nextOfKin: { ...data.nextOfKin, name: e.target.value } })} /></div>
           <div><label className={label}>Relationship</label>
@@ -204,8 +271,9 @@ function ApplyPage() {
           </div>
           <div><label className={label}>Phone</label><input className={input()} value={data.nextOfKin.phone} onChange={(e) => setData({ ...data, nextOfKin: { ...data.nextOfKin, phone: e.target.value } })} /></div>
         </div>
-      );
-      case 6: return (
+  );
+
+  const renderPhotoStep = () => (
         <div>
           <label className={label}>Passport-size photo (image only, ≤ 2MB)</label>
           <div className="border-2 border-dashed border-caa-border rounded-md p-6 text-center bg-caa-surface">
@@ -220,10 +288,28 @@ function ApplyPage() {
             {data.photoFile && <p className="mt-2 text-xs text-caa-success flex items-center justify-center gap-1"><Check className="h-3 w-3" />{data.photoFile}</p>}
           </div>
         </div>
-      );
-      case 7: return <ReviewStep data={data} job={job} onJump={setStep} />;
-      default: return null;
-    }
+  );
+
+  const renderReviewStep = () => {
+    const missing = getMissingFields();
+    return (
+      <div className="space-y-3">
+        {missing.length > 0 && (
+          <div className="rounded-lg border border-caa-warning/40 bg-caa-warning/10 p-3">
+            <p className="text-xs font-semibold text-caa-warning flex items-center gap-1.5"><AlertCircle className="h-3.5 w-3.5" /> {missing.length} item{missing.length !== 1 ? "s" : ""} required before you can submit</p>
+            <ul className="mt-1.5 space-y-1">
+              {missing.map((m) => (
+                <li key={m.label} className="text-[11px] text-caa-body flex items-center justify-between gap-2">
+                  <span>· {m.label}</span>
+                  <button onClick={() => setStep(m.step)} className="text-caa-navy hover:underline shrink-0">Go to step</button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <ReviewStep data={data} job={job} onJump={setStep} screeningQs={screeningQs} screeningAnswers={screeningAnswers} hasScreening={hasScreening} />
+      </div>
+    );
   };
 
   return (
@@ -522,26 +608,65 @@ function RefereesStep({ data, setData }: { data: CvProfile; setData: (d: CvProfi
 }
 
 /* ---------- Review ---------- */
-function ReviewStep({ data, job, onJump }: { data: CvProfile; job: any; onJump: (s: number) => void }) {
+/* ---------- Eligibility / screening questions ---------- */
+function EligibilityStep({ questions, answers, onChange }: { questions: ScreeningQuestion[]; answers: Record<string, string>; onChange: (id: string, value: string) => void }) {
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-caa-muted">This role has a few eligibility questions. Answer accurately — your answers are checked against the role's requirements.</p>
+      {questions.map((q) => (
+        <div key={q.id} className="border border-caa-border rounded-md p-3 bg-caa-surface/40">
+          <label className={label}>{q.text}</label>
+          {q.kind === "number" ? (
+            <input
+              type="number"
+              className={input("max-w-xs")}
+              value={answers[q.id] ?? ""}
+              onChange={(e) => onChange(q.id, e.target.value)}
+              placeholder="Enter a number…"
+            />
+          ) : (
+            <select className={input("max-w-xs")} value={answers[q.id] ?? ""} onChange={(e) => onChange(q.id, e.target.value)}>
+              <option value="">Select…</option>
+              <option value="Yes">Yes</option>
+              <option value="No">No</option>
+            </select>
+          )}
+        </div>
+      ))}
+      {questions.length === 0 && <p className="text-xs text-caa-muted">No eligibility questions for this role.</p>}
+    </div>
+  );
+}
+
+function ReviewStep({ data, job, onJump, screeningQs = [], screeningAnswers = {}, hasScreening = false }: {
+  data: CvProfile; job: any; onJump: (s: number) => void;
+  screeningQs?: ScreeningQuestion[]; screeningAnswers?: Record<string, string>; hasScreening?: boolean;
+}) {
+  const offset = hasScreening ? 1 : 0;
   const sections: { title: string; step: number; render: () => React.ReactNode }[] = [
     { title: "Personal", step: 0, render: () => <p className="text-sm">{data.personal.firstName} {data.personal.lastName} · {data.personal.email} · {data.personal.phone || "—"} · DOB {data.personal.dob || "—"}</p> },
-    { title: "Qualifications", step: 1, render: () => (
+    ...(hasScreening ? [{ title: "Eligibility", step: 1, render: () => (
+      <ul className="text-sm space-y-1">
+        {screeningQs.map((q) => <li key={q.id}>· {q.text} — <span className="font-medium">{screeningAnswers[q.id] || "—"}</span></li>)}
+      </ul>
+    ) }] : []),
+    { title: "Qualifications", step: 1 + offset, render: () => (
       <ul className="text-sm space-y-1">
         <li className="text-xs text-caa-muted">Highest: {data.highestLevel || "—"}</li>
         {data.qualifications.map((q, i) => <li key={i}>· {q.level} — {q.course || q.school || "—"} ({q.year || "—"})</li>)}
         {data.qualifications.length === 0 && <li className="text-caa-muted">No qualifications added.</li>}
       </ul>
     )},
-    { title: "Skills", step: 2, render: () => <p className="text-sm">{data.skills.join(" · ") || <span className="text-caa-muted">None</span>}</p> },
-    { title: "Experience", step: 3, render: () => (
+    { title: "Skills", step: 2 + offset, render: () => <p className="text-sm">{data.skills.join(" · ") || <span className="text-caa-muted">None</span>}</p> },
+    { title: "Experience", step: 3 + offset, render: () => (
       <ul className="text-sm space-y-1">
         {data.experience.map((x, i) => <li key={i}>· {x.title} @ {x.organisation} ({x.start} → {x.end || "present"})</li>)}
         {data.experience.length === 0 && <li className="text-caa-muted">No experience added.</li>}
       </ul>
     )},
-    { title: "Referees", step: 4, render: () => <p className="text-sm">{data.referees.filter((r) => r.name).length} provided</p> },
-    { title: "Next of Kin", step: 5, render: () => <p className="text-sm">{data.nextOfKin.name || "—"} ({data.nextOfKin.relationship || "—"})</p> },
-    { title: "Photo", step: 6, render: () => <p className="text-sm">{data.photoFile || <span className="text-caa-muted">Not uploaded</span>}</p> },
+    { title: "Referees", step: 4 + offset, render: () => <p className="text-sm">{data.referees.filter((r) => r.name).length} provided</p> },
+    { title: "Next of Kin", step: 5 + offset, render: () => <p className="text-sm">{data.nextOfKin.name || "—"} ({data.nextOfKin.relationship || "—"})</p> },
+    { title: "Passport Photo", step: 6 + offset, render: () => <p className="text-sm">{data.photoFile || <span className="text-caa-muted">Not uploaded</span>}</p> },
   ];
   return (
     <div className="space-y-3">

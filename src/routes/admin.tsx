@@ -10,9 +10,10 @@ import {
   LayoutDashboard, FileText, GraduationCap, Download, ClipboardList, Settings,
   ChevronRight, FileDown, RefreshCw, CheckCircle2, XCircle, Bell, Eye, EyeOff,
   Printer, Lock, Filter, TrendingUp, Upload, FileSearch, Mail, ExternalLink,
+  Menu, X,
 } from "lucide-react";
 import {
-  useApp, CAA_STAFF, HR_USERS, canAccess,
+  useApp, CAA_STAFF, HR_USERS, canAccess, screeningAnswerPasses,
   type Job, type Visibility, type QualLevel, type AuditEntry, type AdminSettings,
   type Application, type ApplicationStatus, type JobCriteria, type ScreeningQuestion,
   type PermissionOverride, type AdminRole, type SentEmail,
@@ -86,6 +87,7 @@ function AdminPage() {
           sentEmails, logEmail, clearEmailLog } = useApp();
   const { tab = auth.accountType === "admin" ? "dashboard" : "login", jobId } = Route.useSearch();
   const navigate = useNavigate();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   if (auth.accountType !== "admin") {
     return (
@@ -104,7 +106,7 @@ function AdminPage() {
 
   const role = auth.adminRole ?? "hr";
   const perms = permissionOverrides;
-  const go = (t: AdminTab) => navigate({ to: "/admin", search: { tab: t } });
+  const go = (t: AdminTab) => { navigate({ to: "/admin", search: { tab: t } }); setMobileNavOpen(false); };
   const actor = `${auth.firstName} ${auth.lastName}`;
 
   const visibleNav = ALL_NAV.filter(({ perm }) =>
@@ -122,11 +124,12 @@ function AdminPage() {
   }).length;
   const actionCount = pendingApps + awaitingInterview + closingSoon + unreadCount;
 
-  return (
-    <div className="flex min-h-[calc(100vh-108px)]">
-      {/* ── Sidebar ── */}
-      <aside className="w-56 bg-caa-navy shrink-0 flex flex-col">
-        <div className="px-4 py-5 border-b border-white/10">
+  const activeLabel = visibleNav.find((n) => n.key === tab)?.label ?? "HR Console";
+
+  const sidebarNav = (
+    <>
+      <div className="px-4 py-5 border-b border-white/10 flex items-start justify-between gap-2">
+        <div>
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/50">HR Console</p>
           <p className="text-sm font-semibold text-white mt-0.5">{auth.firstName} {auth.lastName}</p>
           <span className={`mt-1 inline-block text-[10px] px-2 py-0.5 rounded-full font-semibold capitalize ${
@@ -135,42 +138,66 @@ function AdminPage() {
             "bg-green-400/20 text-green-300"
           }`}>{role === "super" ? "Super Admin" : role === "hr" ? "HR Director" : "Recruiter"}</span>
         </div>
-        <nav className="flex-1 py-2">
-          {visibleNav.map(({ key, label, Icon }) => {
-            const active = tab === key;
-            return (
-              <button key={key} onClick={() => go(key)}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium transition-colors text-left ${
-                  active ? "bg-white/15 text-white" : "text-white/65 hover:bg-white/8 hover:text-white"
-                }`}
-              >
-                <Icon className="h-4 w-4 shrink-0" /> {label}
-              </button>
-            );
-          })}
-        </nav>
-        {actionCount > 0 && (
-          <button onClick={() => go("dashboard")} className="mx-3 mb-3 w-[calc(100%-24px)] text-left px-3 py-2.5 bg-caa-warning/15 border border-caa-warning/30 rounded-lg hover:bg-caa-warning/20 transition-colors">
-            <div className="flex items-center gap-2 mb-1.5">
-              <Bell className="h-3.5 w-3.5 text-caa-warning shrink-0" />
-              <span className="text-[11px] text-caa-warning font-semibold">{actionCount} pending action{actionCount !== 1 ? "s" : ""}</span>
-            </div>
-            {pendingApps > 0       && <p className="text-[10px] text-white/55 pl-5 leading-5">· {pendingApps} new application{pendingApps !== 1 ? "s" : ""}</p>}
-            {awaitingInterview > 0 && <p className="text-[10px] text-white/55 pl-5 leading-5">· {awaitingInterview} awaiting interview</p>}
-            {closingSoon > 0       && <p className="text-[10px] text-white/55 pl-5 leading-5">· {closingSoon} job{closingSoon !== 1 ? "s" : ""} closing in ≤7 days</p>}
-            {unreadCount > 0       && <p className="text-[10px] text-white/55 pl-5 leading-5">· {unreadCount} unread alert{unreadCount !== 1 ? "s" : ""}</p>}
-          </button>
-        )}
-        <div className="px-4 py-4 border-t border-white/10">
-          <Link to="/" className="text-white/50 text-[11px] hover:text-white transition-colors flex items-center gap-1.5">
-            <ChevronRight className="h-3 w-3 rotate-180" /> Back to portal
-          </Link>
-        </div>
+        <button onClick={() => setMobileNavOpen(false)} className="md:hidden text-white/60 hover:text-white shrink-0 p-1" aria-label="Close menu">
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+      <nav className="flex-1 py-2 overflow-y-auto">
+        {visibleNav.map(({ key, label, Icon }) => {
+          const active = tab === key;
+          return (
+            <button key={key} onClick={() => go(key)}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium transition-colors text-left ${
+                active ? "bg-white/15 text-white" : "text-white/65 hover:bg-white/8 hover:text-white"
+              }`}
+            >
+              <Icon className="h-4 w-4 shrink-0" /> {label}
+            </button>
+          );
+        })}
+      </nav>
+      {actionCount > 0 && (
+        <button onClick={() => go("dashboard")} className="mx-3 mb-3 w-[calc(100%-24px)] text-left px-3 py-2.5 bg-caa-warning/15 border border-caa-warning/30 rounded-lg hover:bg-caa-warning/20 transition-colors">
+          <div className="flex items-center gap-2 mb-1.5">
+            <Bell className="h-3.5 w-3.5 text-caa-warning shrink-0" />
+            <span className="text-[11px] text-caa-warning font-semibold">{actionCount} pending action{actionCount !== 1 ? "s" : ""}</span>
+          </div>
+          {pendingApps > 0       && <p className="text-[10px] text-white/55 pl-5 leading-5">· {pendingApps} new application{pendingApps !== 1 ? "s" : ""}</p>}
+          {awaitingInterview > 0 && <p className="text-[10px] text-white/55 pl-5 leading-5">· {awaitingInterview} awaiting interview</p>}
+          {closingSoon > 0       && <p className="text-[10px] text-white/55 pl-5 leading-5">· {closingSoon} job{closingSoon !== 1 ? "s" : ""} closing in ≤7 days</p>}
+          {unreadCount > 0       && <p className="text-[10px] text-white/55 pl-5 leading-5">· {unreadCount} unread alert{unreadCount !== 1 ? "s" : ""}</p>}
+        </button>
+      )}
+      <div className="px-4 py-4 border-t border-white/10">
+        <Link to="/" className="text-white/50 text-[11px] hover:text-white transition-colors flex items-center gap-1.5">
+          <ChevronRight className="h-3 w-3 rotate-180" /> Back to portal
+        </Link>
+      </div>
+    </>
+  );
+
+  return (
+    <div className="flex min-h-[calc(100vh-108px)] relative">
+      {/* ── Sidebar (desktop: static; mobile: slide-in drawer) ── */}
+      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-caa-navy flex flex-col transition-transform duration-200 md:static md:z-auto md:w-56 md:shrink-0 md:translate-x-0 ${
+        mobileNavOpen ? "translate-x-0" : "-translate-x-full"
+      }`}>
+        {sidebarNav}
       </aside>
+      {mobileNavOpen && (
+        <div onClick={() => setMobileNavOpen(false)} className="fixed inset-0 z-40 bg-black/40 md:hidden" aria-hidden="true" />
+      )}
 
       {/* ── Content ── */}
-      <div className="flex-1 bg-caa-surface overflow-auto">
-        <div className="px-6 py-6 max-w-5xl">
+      <div className="flex-1 bg-caa-surface overflow-auto min-w-0">
+        {/* Mobile top bar */}
+        <div className="md:hidden sticky top-0 z-30 flex items-center gap-3 px-4 py-3 bg-caa-navy text-white">
+          <button onClick={() => setMobileNavOpen(true)} className="p-1 -ml-1" aria-label="Open menu">
+            <Menu className="h-5 w-5" />
+          </button>
+          <p className="text-sm font-semibold truncate">{activeLabel}</p>
+        </div>
+        <div className="px-4 sm:px-6 py-4 sm:py-6 max-w-5xl">
           {tab === "dashboard"   && <DashboardTab jobs={jobs} applications={applications} isExpired={isExpired} navigate={navigate} role={role} />}
           {tab === "jobs"        && canAccess(role, "canManageJobs", perms) && <JobsTab jobs={jobs} isExpired={isExpired} addJob={addJob} updateJob={updateJob} deleteJob={deleteJob} onViewApps={(id: number) => navigate({ to: "/admin", search: { tab: "apps", jobId: id } })} />}
           {tab === "apps"        && canAccess(role, "canViewApplications", perms) && <AppsTab jobs={jobs} applications={applications} jobId={jobId} cvStore={cvStore} updateStatus={updateApplicationStatus} logAction={logAction} actor={actor} criteria={criteria} role={role} perms={perms} logEmail={logEmail} />}
@@ -644,8 +671,8 @@ function JobsTab({ jobs, isExpired, addJob, updateJob, deleteJob, onViewApps }: 
           <Plus className="h-4 w-4" /> New listing
         </button>
       </div>
-      <div className="caa-card overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="caa-card overflow-x-auto">
+        <table className="w-full min-w-[640px] text-sm">
           <thead className="bg-caa-surface text-xs text-caa-muted">
             <tr>
               <th className="text-left p-3">Title</th>
@@ -877,16 +904,24 @@ function autoQualify(app: Application, job: Job | undefined, cv: any, jobCriteri
       checks.push({ label: "Keywords", pass: missing.length === 0, detail: missing.length === 0 ? "All matched" : `Missing: ${missing.join(", ")}` });
     }
 
-    // Screening questions (keyword match against CV text)
+    // Screening questions — precise answer check when the candidate answered on the
+    // application form (kind set); legacy text-only questions fall back to CV keyword matching.
     if (jobCriteria?.screeningQuestions?.length) {
       const cvText = JSON.stringify(cv).toLowerCase();
       for (const q of jobCriteria.screeningQuestions) {
+        const qLabel = `${q.type === "qualifier" ? "Q" : "⚠"}: ${q.text.slice(0, 35)}${q.text.length > 35 ? "…" : ""}`;
+        if (q.kind) {
+          const answer = app.screeningAnswers?.[q.id];
+          const pass = screeningAnswerPasses(q, answer);
+          checks.push({ label: qLabel, pass, detail: answer ? `Answered "${answer}" — ${pass ? "meets" : "does not meet"} requirement` : "Not answered" });
+          continue;
+        }
         const words = q.text.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((w) => w.length > 3);
         const matched = words.length > 0 && words.some((w) => cvText.includes(w));
         if (q.type === "qualifier") {
-          checks.push({ label: `Q: ${q.text.slice(0, 35)}${q.text.length > 35 ? "…" : ""}`, pass: matched, detail: matched ? "Evidence found in CV" : "No evidence in CV" });
+          checks.push({ label: qLabel, pass: matched, detail: matched ? "Evidence found in CV" : "No evidence in CV" });
         } else {
-          checks.push({ label: `⚠ ${q.text.slice(0, 35)}${q.text.length > 35 ? "…" : ""}`, pass: !matched, detail: !matched ? "Not flagged" : "Disqualifying match found" });
+          checks.push({ label: qLabel, pass: !matched, detail: !matched ? "Not flagged" : "Disqualifying match found" });
         }
       }
     }
@@ -923,15 +958,23 @@ function autoQualify(app: Application, job: Job | undefined, cv: any, jobCriteri
       checks.push({ label: "CGPA", pass: app.cgpa >= jobCriteria.minCgpa, detail: `${app.cgpa.toFixed(1)} vs min ${jobCriteria.minCgpa.toFixed(1)}` });
     }
 
-    // Screening questions in demo mode: qualifiers mirror demoOk; disqualifiers rarely flag
+    // Screening questions: precise answer check if the candidate answered on the application
+    // form; otherwise demo mode mirrors demoOk for qualifiers / rarely flags disqualifiers.
     if (jobCriteria?.screeningQuestions?.length) {
       for (const q of jobCriteria.screeningQuestions) {
+        const qLabel = `${q.type === "qualifier" ? "Q" : "⚠"}: ${q.text.slice(0, 35)}${q.text.length > 35 ? "…" : ""}`;
+        const answer = app.screeningAnswers?.[q.id];
+        if (q.kind && answer !== undefined) {
+          const pass = screeningAnswerPasses(q, answer);
+          checks.push({ label: qLabel, pass, detail: `Answered "${answer}" — ${pass ? "meets" : "does not meet"} requirement` });
+          continue;
+        }
         const qSeed = (app.id * 13 + q.text.length * 7) % 100;
         if (q.type === "qualifier") {
-          checks.push({ label: `Q: ${q.text.slice(0, 35)}${q.text.length > 35 ? "…" : ""}`, pass: demoOk, detail: demoOk ? "Criterion met (from submitted documents)" : "Not satisfied" });
+          checks.push({ label: qLabel, pass: demoOk, detail: demoOk ? "Criterion met (from submitted documents)" : "Not satisfied" });
         } else {
           const flagged = !demoOk && qSeed < 30;
-          checks.push({ label: `⚠ ${q.text.slice(0, 35)}${q.text.length > 35 ? "…" : ""}`, pass: !flagged, detail: !flagged ? "Not flagged" : "Disqualifying indicator found" });
+          checks.push({ label: qLabel, pass: !flagged, detail: !flagged ? "Not flagged" : "Disqualifying indicator found" });
         }
       }
     }
@@ -1076,8 +1119,8 @@ function AppsTab({ jobs, applications, jobId, cvStore, updateStatus, logAction, 
           </div>
 
           {/* Breakdown table */}
-          <div className="rounded-md border border-caa-border overflow-hidden max-h-64 overflow-y-auto">
-            <table className="w-full text-xs">
+          <div className="rounded-md border border-caa-border max-h-64 overflow-auto">
+            <table className="w-full text-xs min-w-[480px]">
               <thead className="bg-caa-surface text-caa-muted sticky top-0">
                 <tr><th className="text-left p-2">Candidate</th><th className="text-left p-2">Role</th><th className="text-left p-2">Result</th><th className="text-left p-2">Failed checks</th></tr>
               </thead>
@@ -1201,8 +1244,8 @@ function AppsTab({ jobs, applications, jobId, cvStore, updateStatus, logAction, 
         </div>
       )}
 
-      <div className="caa-card overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="caa-card overflow-x-auto">
+        <table className="w-full min-w-[640px] text-sm">
           <thead className="bg-caa-surface text-xs text-caa-muted">
             <tr><th className="text-left p-3">Candidate</th><th className="text-left p-3">Role</th><th className="text-left p-3">Submitted</th><th className="text-left p-3">Status</th><th className="text-left p-3">Completion</th><th className="text-right p-3">Actions</th></tr>
           </thead>
@@ -1443,8 +1486,8 @@ function InternsTab({ applications, jobs, actor }: any) {
         <div><h1 className="font-bold text-xl text-caa-body">Interns (CGPA)</h1><p className="text-xs text-caa-muted mt-0.5">Ranked by CGPA — highest first</p></div>
         <button onClick={() => downloadInternsReport(interns, jobs, actor)} className="inline-flex items-center gap-2 px-3 py-1.5 text-sm bg-caa-navy text-white rounded-md"><FileDown className="h-4 w-4" /> Export PDF</button>
       </div>
-      <div className="caa-card overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="caa-card overflow-x-auto">
+        <table className="w-full min-w-[640px] text-sm">
           <thead className="bg-caa-surface text-xs text-caa-muted">
             <tr><th className="text-left p-3">Rank</th><th className="text-left p-3">Candidate</th><th className="text-left p-3">Position</th><th className="text-left p-3">University</th><th className="text-left p-3">CGPA</th><th className="text-left p-3">Status</th><th className="text-left p-3">Date</th></tr>
           </thead>
@@ -1480,8 +1523,8 @@ function StaffTab({ actor, logAction }: any) {
         <button onClick={() => { downloadStaffReport(STAFF_DATA, actor); logAction("Exported staff register"); }} className="inline-flex items-center gap-2 px-3 py-1.5 text-sm bg-caa-navy text-white rounded-md"><FileDown className="h-4 w-4" /> Export PDF</button>
       </div>
       <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search…" className="w-full px-3 py-2 text-sm border border-caa-border rounded-md bg-white focus:outline-none focus:border-caa-navy" />
-      <div className="caa-card overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="caa-card overflow-x-auto">
+        <table className="w-full min-w-[640px] text-sm">
           <thead className="bg-caa-surface text-xs text-caa-muted">
             <tr><th className="text-left p-3">Emp No.</th><th className="text-left p-3">Name</th><th className="text-left p-3">Department</th><th className="text-left p-3">Position</th><th className="text-left p-3">Email</th><th className="text-left p-3">Joined</th><th className="text-left p-3">Status</th></tr>
           </thead>
@@ -1559,6 +1602,10 @@ function CriteriaTab({ jobs, criteria, saveCriteria, logAction }: { jobs: Job[];
   const [kw, setKw] = useState("");
   const [qText, setQText] = useState("");
   const [qType, setQType] = useState<"qualifier" | "disqualifier">("qualifier");
+  const [qKind, setQKind] = useState<"yesno" | "number">("yesno");
+  const [qAnswer, setQAnswer] = useState<"Yes" | "No">("Yes");
+  const [qMin, setQMin] = useState("");
+  const [qMax, setQMax] = useState("");
   const [saved, setSaved] = useState(false);
 
   const handleJobChange = (id: number) => {
@@ -1571,11 +1618,25 @@ function CriteriaTab({ jobs, criteria, saveCriteria, logAction }: { jobs: Job[];
 
   const addQuestion = () => {
     if (!qText.trim()) return;
-    const q: ScreeningQuestion = { id: Date.now().toString(), text: qText.trim(), type: qType };
+    if (qKind === "number" && qMin === "" && qMax === "") return;
+    const q: ScreeningQuestion = {
+      id: Date.now().toString(), text: qText.trim(), type: qType, kind: qKind,
+      ...(qKind === "yesno" ? { qualifyingAnswer: qAnswer } : {}),
+      ...(qKind === "number" ? { min: qMin !== "" ? Number(qMin) : undefined, max: qMax !== "" ? Number(qMax) : undefined } : {}),
+    };
     setDraft((d) => ({ ...d, screeningQuestions: [...(d.screeningQuestions ?? []), q] }));
-    setQText("");
+    setQText(""); setQMin(""); setQMax("");
   };
   const removeQuestion = (id: string) => setDraft((d) => ({ ...d, screeningQuestions: (d.screeningQuestions ?? []).filter((q) => q.id !== id) }));
+
+  const describeQuestion = (q: ScreeningQuestion) => {
+    if (q.kind === "number") {
+      const range = q.min !== undefined && q.max !== undefined ? `${q.min}–${q.max}`
+        : q.min !== undefined ? `≥ ${q.min}` : q.max !== undefined ? `≤ ${q.max}` : "any";
+      return `Numeric answer must be ${range} to stay eligible.`;
+    }
+    return `Candidate must answer "${q.qualifyingAnswer ?? "Yes"}" to stay eligible.`;
+  };
 
   const save = () => {
     saveCriteria({ jobId: selectedJobId, ...draft });
@@ -1627,19 +1688,40 @@ function CriteriaTab({ jobs, criteria, saveCriteria, logAction }: { jobs: Job[];
         {/* Qualifier / Disqualifier questions */}
         <Section title="Qualifier & Disqualifier questions">
           <div className="rounded-lg border border-caa-border bg-caa-surface/60 p-3 mb-3 text-[11px] text-caa-muted leading-relaxed">
-            <span className="font-semibold text-caa-navy">Qualifier:</span> applicant <strong>must</strong> show evidence of this in their CV to pass screening.<br />
-            <span className="font-semibold text-caa-danger">Disqualifier:</span> if evidence of this is found in their CV, applicant is <strong>automatically excluded</strong>.
+            These questions are shown to the candidate on the application form and checked precisely against their answer.
+            A candidate who fails one is <strong>automatically declined on submission</strong> — they still see the normal "application submitted" confirmation.<br />
+            <span className="font-semibold text-caa-navy">Qualifier</span> / <span className="font-semibold text-caa-danger">Disqualifier</span> only changes which list it's grouped under below; both are enforced the same way.
           </div>
 
           {/* Add new question */}
-          <div className="space-y-2 mb-4">
-            <div className="flex gap-2">
-              <select className={`${fi} w-40 shrink-0`} value={qType} onChange={(e) => setQType(e.target.value as "qualifier" | "disqualifier")}>
+          <div className="space-y-2 mb-4 rounded-lg border border-caa-border p-3">
+            <input className={fi} value={qText} onChange={(e) => setQText(e.target.value)} placeholder="Question text, e.g. Do you have a bachelor's degree? / How old are you?" />
+            <div className="flex flex-wrap gap-2 items-center">
+              <select className={`${fi} w-40`} value={qType} onChange={(e) => setQType(e.target.value as "qualifier" | "disqualifier")}>
                 <option value="qualifier">Qualifier ✓</option>
                 <option value="disqualifier">Disqualifier ✗</option>
               </select>
-              <input className={`${fi} flex-1`} value={qText} onChange={(e) => setQText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addQuestion())} placeholder="e.g. Has relevant aviation experience" />
-              <button onClick={addQuestion} className="px-3 py-1.5 bg-caa-navy text-white text-xs rounded-md shrink-0">Add</button>
+              <select className={`${fi} w-36`} value={qKind} onChange={(e) => setQKind(e.target.value as "yesno" | "number")}>
+                <option value="yesno">Yes / No</option>
+                <option value="number">Number (range)</option>
+              </select>
+              {qKind === "yesno" ? (
+                <label className="flex items-center gap-1.5 text-xs text-caa-body">
+                  Required answer:
+                  <select className={`${fi} w-24`} value={qAnswer} onChange={(e) => setQAnswer(e.target.value as "Yes" | "No")}>
+                    <option value="Yes">Yes</option>
+                    <option value="No">No</option>
+                  </select>
+                </label>
+              ) : (
+                <label className="flex items-center gap-1.5 text-xs text-caa-body">
+                  Acceptable range:
+                  <input type="number" className={`${fi} w-20`} value={qMin} onChange={(e) => setQMin(e.target.value)} placeholder="Min" />
+                  –
+                  <input type="number" className={`${fi} w-20`} value={qMax} onChange={(e) => setQMax(e.target.value)} placeholder="Max" />
+                </label>
+              )}
+              <button onClick={addQuestion} className="px-3 py-1.5 bg-caa-navy text-white text-xs rounded-md shrink-0 ml-auto">Add question</button>
             </div>
           </div>
 
@@ -1651,7 +1733,10 @@ function CriteriaTab({ jobs, criteria, saveCriteria, logAction }: { jobs: Job[];
                 {qualifiers.map((q) => (
                   <div key={q.id} className="flex items-center gap-2 px-3 py-2 rounded-md bg-caa-success/5 border border-caa-success/20">
                     <CheckCircle2 className="h-3.5 w-3.5 text-caa-success shrink-0" />
-                    <span className="text-xs text-caa-body flex-1">{q.text}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-caa-body">{q.text}</p>
+                      <p className="text-[10px] text-caa-muted">{describeQuestion(q)}</p>
+                    </div>
                     <button onClick={() => removeQuestion(q.id)} className="text-caa-danger shrink-0"><Trash2 className="h-3.5 w-3.5" /></button>
                   </div>
                 ))}
@@ -1667,7 +1752,10 @@ function CriteriaTab({ jobs, criteria, saveCriteria, logAction }: { jobs: Job[];
                 {disqualifiers.map((q) => (
                   <div key={q.id} className="flex items-center gap-2 px-3 py-2 rounded-md bg-caa-danger/5 border border-caa-danger/20">
                     <XCircle className="h-3.5 w-3.5 text-caa-danger shrink-0" />
-                    <span className="text-xs text-caa-body flex-1">{q.text}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-caa-body">{q.text}</p>
+                      <p className="text-[10px] text-caa-muted">{describeQuestion(q)}</p>
+                    </div>
                     <button onClick={() => removeQuestion(q.id)} className="text-caa-danger shrink-0"><Trash2 className="h-3.5 w-3.5" /></button>
                   </div>
                 ))}
@@ -1706,8 +1794,8 @@ function AuditTab({ audit, actor }: { audit: AuditEntry[]; actor: string }) {
         <button onClick={() => downloadAuditLog(audit, actor)} className="inline-flex items-center gap-2 px-3 py-1.5 text-sm bg-caa-navy text-white rounded-md"><FileDown className="h-4 w-4" /> Export PDF</button>
       </div>
       <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter…" className="w-full px-3 py-2 text-sm border border-caa-border rounded-md bg-white focus:outline-none focus:border-caa-navy" />
-      <div className="caa-card overflow-hidden">
-        <table className="w-full text-sm">
+      <div className="caa-card overflow-x-auto">
+        <table className="w-full min-w-[640px] text-sm">
           <thead className="bg-caa-surface text-xs text-caa-muted">
             <tr><th className="text-left p-3">Timestamp</th><th className="text-left p-3">Actor</th><th className="text-left p-3">Role</th><th className="text-left p-3">Action</th><th className="text-left p-3">Target</th></tr>
           </thead>

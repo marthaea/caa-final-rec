@@ -3,7 +3,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   ShieldCheck, Bell, FileText, ArrowLeft, Eye, EyeOff, Mail, Lock, CheckCircle2,
 } from "lucide-react";
-import { useApp, isCAAEmail, ADMIN_DEMO } from "@/context/AppContext";
+import { useApp, isCAAEmail, ADMIN_DEMO, CANDIDATE_DEMO } from "@/context/AppContext";
 import logo from "@/assets/caa-logo.png";
 
 export const Route = createFileRoute("/login")({
@@ -35,6 +35,13 @@ function LoginPage() {
       signIn("System", "Administrator", email, { accountType: "admin" });
       pushToast({ type: "success", title: "Admin signed in", message: "Welcome to the CAA admin console." });
       navigate({ to: "/admin", search: { tab: "dashboard" } });
+      return;
+    }
+    // Demo candidate shortcut — signs in as the seeded candidate with existing applications on file.
+    if (email.trim().toLowerCase() === CANDIDATE_DEMO.email) {
+      signIn(CANDIDATE_DEMO.firstName, CANDIDATE_DEMO.lastName, email, { accountType: "external" });
+      pushToast({ type: "success", title: `Welcome back, ${CANDIDATE_DEMO.firstName} ${CANDIDATE_DEMO.lastName}` });
+      navigate({ to: "/dashboard" });
       return;
     }
     // Heuristic: a CAA email = internal; anything else = external (downgraded if user claims internal elsewhere).
@@ -170,6 +177,10 @@ function LoginPage() {
 
             <p className="text-[11px] text-caa-muted text-center mt-1">
               Protected by industry-standard encryption · CAA Uganda never asks for your password by phone or email.
+            </p>
+
+            <p className="text-[11px] text-caa-muted text-center bg-caa-surface border border-caa-border rounded-md px-3 py-2">
+              Demo candidate account: <span className="font-medium text-caa-navy">{CANDIDATE_DEMO.email}</span> (any password)
             </p>
           </form>
 
